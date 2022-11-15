@@ -47,7 +47,7 @@ def train(args):
   tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
   data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-  experiment_name = args.model_name+'_bs'+str(args.batch_size)+'_ep'+str(args.max_epoch)+'_lr'+str(args.learning_rate)+'_dt'+args.train_data
+  experiment_name = args.model_name+'_bs'+str(args.batch_size)+'_ep'+str(args.max_epoch)+'_lr'+str(args.learning_rate)+'_dt_'+args.train_data
   start_mlflow(experiment_name)
 
   # load dataset
