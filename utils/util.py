@@ -1,67 +1,62 @@
-import json
-import torch
+import pickle as pickle
+import os
 import pandas as pd
-from pathlib import Path
-from itertools import repeat
-from collections import OrderedDict
+import sklearn
+import numpy as np
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 
+def klue_re_micro_f1(preds, labels):
+    """KLUE-RE micro f1 (except no_relation)"""
+    label_list = ['no_relation', 'org:top_members/employees', 'org:members',
+       'org:product', 'per:title', 'org:alternate_names',
+       'per:employee_of', 'org:place_of_headquarters', 'per:product',
+       'org:number_of_employees/members', 'per:children',
+       'per:place_of_residence', 'per:alternate_names',
+       'per:other_family', 'per:colleagues', 'per:origin', 'per:siblings',
+       'per:spouse', 'org:founded', 'org:political/religious_affiliation',
+       'org:member_of', 'per:parents', 'org:dissolved',
+       'per:schools_attended', 'per:date_of_death', 'per:date_of_birth',
+       'per:place_of_birth', 'per:place_of_death', 'org:founded_by',
+       'per:religion']
+    no_relation_label_idx = label_list.index("no_relation")
+    label_indices = list(range(len(label_list)))
+    label_indices.remove(no_relation_label_idx)
+    return sklearn.metrics.f1_score(labels, preds, average="micro", labels=label_indices) * 100.0
 
-def ensure_dir(dirname):
-    dirname = Path(dirname)
-    if not dirname.is_dir():
-        dirname.mkdir(parents=True, exist_ok=False)
+def klue_re_auprc(probs, labels):
+    """KLUE-RE AUPRC (with no_relation)"""
+    labels = np.eye(30)[labels]
 
-def read_json(fname):
-    fname = Path(fname)
-    with fname.open('rt') as handle:
-        return json.load(handle, object_hook=OrderedDict)
+    score = np.zeros((30,))
+    for c in range(30):
+        targets_c = labels.take([c], axis=1).ravel()
+        preds_c = probs.take([c], axis=1).ravel()
+        precision, recall, _ = sklearn.metrics.precision_recall_curve(targets_c, preds_c)
+        score[c] = sklearn.metrics.auc(recall, precision)
+    return np.average(score) * 100.0
 
-def write_json(content, fname):
-    fname = Path(fname)
-    with fname.open('wt') as handle:
-        json.dump(content, handle, indent=4, sort_keys=False)
+def compute_metrics(pred):
+  """ validation을 위한 metrics function """
+  labels = pred.label_ids
+  preds = pred.predictions.argmax(-1)
+  probs = pred.predictions
 
-def inf_loop(data_loader):
-    ''' wrapper function for endless data loader. '''
-    for loader in repeat(data_loader):
-        yield from loader
+  # calculate accuracy using sklearn's function
+  f1 = klue_re_micro_f1(preds, labels)
+  auprc = klue_re_auprc(probs, labels)
+  acc = accuracy_score(labels, preds) # 리더보드 평가에는 포함되지 않습니다.
 
-def prepare_device(n_gpu_use):
-    """
-    setup GPU device if available. get gpu device indices which are used for DataParallel
-    """
-    n_gpu = torch.cuda.device_count()
-    if n_gpu_use > 0 and n_gpu == 0:
-        print("Warning: There\'s no GPU available on this machine,"
-              "training will be performed on CPU.")
-        n_gpu_use = 0
-    if n_gpu_use > n_gpu:
-        print(f"Warning: The number of GPU\'s configured to use is {n_gpu_use}, but only {n_gpu} are "
-              "available on this machine.")
-        n_gpu_use = n_gpu
-    device = torch.device('cuda:0' if n_gpu_use > 0 else 'cpu')
-    list_ids = list(range(n_gpu_use))
-    return device, list_ids
+  return {
+      'micro f1 score': f1,
+      'auprc' : auprc,
+      'accuracy': acc,
+  }
 
-class MetricTracker:
-    def __init__(self, *keys, writer=None):
-        self.writer = writer
-        self._data = pd.DataFrame(index=keys, columns=['total', 'counts', 'average'])
-        self.reset()
-
-    def reset(self):
-        for col in self._data.columns:
-            self._data[col].values[:] = 0
-
-    def update(self, key, value, n=1):
-        if self.writer is not None:
-            self.writer.add_scalar(key, value)
-        self._data.total[key] += value * n
-        self._data.counts[key] += n
-        self._data.average[key] = self._data.total[key] / self._data.counts[key]
-
-    def avg(self, key):
-        return self._data.average[key]
-
-    def result(self):
-        return dict(self._data.average)
+def label_to_num(label):
+  num_label = []
+  with open('dict_label_to_num.pkl', 'rb') as f:
+    dict_label_to_num = pickle.load(f)
+  for v in label:
+    num_label.append(dict_label_to_num[v])
+  
+  return num_label
