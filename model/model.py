@@ -1,5 +1,6 @@
 from transformers import PreTrainedModel
-from transformers import AutoTokenizer, AutoConfig, AutoModel, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
+from transformers import AutoTokenizer, AutoConfig, AutoModel, AutoModelForSequenceClassification, Trainer, TrainingArguments
+from transformers import RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
 from transformers.modeling_outputs import TokenClassifierOutput
 from torch import nn
 # https://huggingface.co/docs/transformers/custom_models#sending-the-code-to-the-hub
