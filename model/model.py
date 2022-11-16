@@ -1,5 +1,6 @@
 from transformers import PreTrainedModel
-from transformers import AutoTokenizer, AutoConfig, AutoModel, AutoModelForSequenceClassification, Trainer, TrainingArguments, RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
+from transformers import AutoTokenizer, AutoConfig, AutoModel, AutoModelForSequenceClassification, Trainer, TrainingArguments
+from transformers import RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
 from transformers.modeling_outputs import TokenClassifierOutput
 from torch import nn
 # https://huggingface.co/docs/transformers/custom_models#sending-the-code-to-the-hub
@@ -31,5 +32,9 @@ class CustomModel(nn.Module):
       loss_fct = nn.CrossEntropyLoss()
       loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
     
+<<<<<<< HEAD
     #return TokenClassifierOutput(loss=loss, logits=logits, hidden_states=outputs.hidden_states,attentions=outputs.attentions)
+=======
+    # return TokenClassifierOutput(loss=loss, logits=logits, hidden_states=outputs.hidden_states,attentions=outputs.attentions)
+>>>>>>> origin/dev
     return loss, logits
