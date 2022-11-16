@@ -113,7 +113,7 @@ def train(args):
 
   # train model
   trainer.train()
-  model.save_pretrained('./best_model')
+  #model.save_pretrained('./best_model')
   mlflow.end_run()
   trainer.push_to_hub()
 
