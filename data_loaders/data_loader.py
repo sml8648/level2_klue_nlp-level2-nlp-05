@@ -1,4 +1,3 @@
-import pickle as pickle
 import pandas as pd
 import torch
 from utils.util import label_to_num
@@ -16,12 +15,13 @@ class RE_Dataset(torch.utils.data.Dataset):
 
   def __len__(self):
     return len(self.labels)
+  
 
 def preprocessing_dataset(dataset):
   """ 처음 불러온 csv 파일을 원하는 형태의 DataFrame으로 변경 시켜줍니다."""
   subject_entity = []
   object_entity = []
-  for i,j in zip(dataset['subject_entity'], dataset['object_entity']):
+  for i, j in zip(dataset['subject_entity'], dataset['object_entity']):
     i = i[1:-1].split(',')[0].split(':')[1]
     j = j[1:-1].split(',')[0].split(':')[1]
 
@@ -30,11 +30,11 @@ def preprocessing_dataset(dataset):
   out_dataset = pd.DataFrame({'id':dataset['id'], 'sentence':dataset['sentence'],'subject_entity':subject_entity,'object_entity':object_entity,'label':dataset['label'],})
   return out_dataset
 
+
 def load_data(dataset_dir):
   """ csv 파일을 경로에 맡게 불러 옵니다. """
   pd_dataset = pd.read_csv(dataset_dir)
   dataset = preprocessing_dataset(pd_dataset)
-  
   return dataset
 
 def tokenized_dataset(dataset, tokenizer):
@@ -44,7 +44,7 @@ def tokenized_dataset(dataset, tokenizer):
     temp = ''
     temp = e01 + '[SEP]' + e02
     concat_entity.append(temp)
-    
+  
   tokenized_sentences = tokenizer(
       concat_entity,
       list(dataset['sentence']),
@@ -54,6 +54,7 @@ def tokenized_dataset(dataset, tokenizer):
       max_length=256,
       add_special_tokens=True,
   )
+  assert '[SEP]' in tokenizer.special_tokens_map.values(), "This tokenizer does not use '[SEP]' token."
   return tokenized_sentences
 
 
@@ -76,6 +77,7 @@ def load_dev_dataset(tokenizer, dev_data):
   RE_dev_dataset = RE_Dataset(tokenized_dev, dev_label)
   return RE_dev_dataset
 
+<<<<<<< HEAD
 def load_test_dataset(tokenizer, test_data):
   """
     test dataset을 불러온 후,
@@ -86,3 +88,14 @@ def load_test_dataset(tokenizer, test_data):
   # tokenizing dataset
   tokenized_test = tokenized_dataset(test_dataset, tokenizer)
   return test_dataset['id'], tokenized_test, test_label
+=======
+
+def load_test_dataset(tokenizer, test_data):
+  test_dataset = load_data(f"../dataset/test/{test_data}.csv")
+  test_label = label_to_num(test_dataset['label'].values)
+  # tokenizing dataset
+  tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+  # make dataset for pytorch.
+  RE_test_dataset = RE_Dataset(tokenized_test, dev_label)
+  return RE_test_dataset
+>>>>>>> origin/dev
