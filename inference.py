@@ -53,7 +53,7 @@ def main(args):
   MODEL_NAME = args.model_name # model name.
   model = custom.CustomModel(MODEL_NAME, 30)
   #model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=30)
-  checkpoint = torch.load('./output/checkpoint-500/pytorch_model.bin')
+  checkpoint = torch.load(args.model_dir)
   #print(checkpoint.keys())
   model.load_state_dict(checkpoint)
   #model = model.load_from_checkpoint()
@@ -82,24 +82,8 @@ def main(args):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--model_name', default='klue/roberta-base', type=str)
-  parser.add_argument('--batch_size', default=16, type=int)
-  parser.add_argument('--max_epoch', default=5, type=int)
-  parser.add_argument('--shuffle', default=True)
-
-  parser.add_argument('--learning_rate', default=5e-5, type=float)
-  parser.add_argument('--train_data', default='train')
-  parser.add_argument('--dev_data', default='dev')
-  parser.add_argument('--test_data', default='dev')
-  parser.add_argument('--predict_data', default='test')
-  parser.add_argument('--optimizer', default='AdamW')
-  parser.add_argument('--loss_function', default='L1Loss')
-
-  parser.add_argument('--preprocessing', default=False)
-  parser.add_argument('--precision', default=32, type=int)
-  parser.add_argument('--dropout', default=0.1, type=float)
-  
   # model dir
-  parser.add_argument('--model_dir', type=str, default="./output")
+  parser.add_argument('--model_dir', type=str, default="./output/checkpoint-500/pytorch_model.bin")
   args = parser.parse_args()
   print(args)
   main(args)
