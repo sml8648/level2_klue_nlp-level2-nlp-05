@@ -53,7 +53,7 @@ def main(args):
   MODEL_NAME = args.model_name # model name.
   model = custom.CustomModel(MODEL_NAME, 30)
   #model = AutoModelForSequenceClassification.from_pretrained(args.model_name, num_labels=30)
-  checkpoint = torch.load(args.model_dir)
+  checkpoint = torch.load(f"./output/checkpoint-{args.checkpoint}/pytorch_model.bin")
   #print(checkpoint.keys())
   model.load_state_dict(checkpoint)
   #model = model.load_from_checkpoint()
@@ -83,7 +83,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--model_name', default='klue/roberta-base', type=str)
   # model dir
-  parser.add_argument('--model_dir', type=str, default="./output/checkpoint-500/pytorch_model.bin")
+  parser.add_argument('--checkpoint', type=str, default=500)
   args = parser.parse_args()
   print(args)
   main(args)
