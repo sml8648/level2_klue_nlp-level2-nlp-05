@@ -111,5 +111,7 @@ datasets/
 .idea/
 __MACOSX/
 
-output
-mlruns
+output/*
+mlruns/*
+best_model/*
+

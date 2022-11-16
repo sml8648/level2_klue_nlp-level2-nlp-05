@@ -80,9 +80,7 @@ def load_dev_dataset(tokenizer, dev_path):
 
 def load_test_dataset(tokenizer, test_path):
   test_dataset = load_data(test_path)
-  test_label = label_to_num(test_dataset['label'].values)
+  test_label = list(map(int,test_dataset['label'].values))
   # tokenizing dataset
   tokenized_test = tokenized_dataset(test_dataset, tokenizer)
-  # make dataset for pytorch.
-  RE_test_dataset = RE_Dataset(tokenized_test, dev_label)
-  return RE_test_dataset
+  return test_dataset['id'], tokenized_test, test_label
