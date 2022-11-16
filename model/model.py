@@ -17,9 +17,9 @@ class CustomModel(nn.Module):
     self.dropout = nn.Dropout(0.1) 
     self.classifier = nn.Linear(768,num_labels) # load and initialize weights
 
-  def forward(self, input_ids=None, attention_mask=None,labels=None):
+  def forward(self, input_ids=None, attention_mask=None, token_type_ids=None ,labels=None):
     #Extract outputs from the body
-    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
 
     #Add custom layers
     sequence_output = self.dropout(outputs[0]) #outputs[0]=last hidden state

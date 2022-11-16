@@ -75,3 +75,14 @@ def load_dev_dataset(tokenizer, dev_data):
   # make dataset for pytorch.
   RE_dev_dataset = RE_Dataset(tokenized_dev, dev_label)
   return RE_dev_dataset
+
+def load_test_dataset(tokenizer, test_data):
+  """
+    test dataset을 불러온 후,
+    tokenizing 합니다.
+  """
+  test_dataset = load_data(f"../dataset/test/{test_data}.csv")
+  test_label = list(map(int,test_dataset['label'].values))
+  # tokenizing dataset
+  tokenized_test = tokenized_dataset(test_dataset, tokenizer)
+  return test_dataset['id'], tokenized_test, test_label
