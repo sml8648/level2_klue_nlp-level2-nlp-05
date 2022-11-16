@@ -1,36 +1,34 @@
 import torch.nn.functional as F
 from torch import nn
+import torch
 
 
 def nll_loss(output, target):
     return F.nll_loss(output, target)
 
-def crossentropy_Loss(output, target):
-    return CrossEntropyLoss(output, target)
+def crossentropy_loss(output, target):
+    return nn.CrossEntropyLoss(output, target)
 
 class FocalLoss(nn.Module):
-    """Implementation of Facal Loss"""
-    def __init__(self, weight=None, gamma=2, reduction="mean"):
+    def __init__(self, alpha=1, gamma=2, logits=False, reduce=True):
         super(FocalLoss, self).__init__()
-        self.weighted_cs = nn.CrossEntropyLoss(weight=weight, reduction="none")
-        self.cs = nn.CrossEntropyLoss(reduction="none")
+        self.alpha = alpha
         self.gamma = gamma
-        self.reduction = reduction
-        
-    def forward(self, predicted, target):
-        """
-        predicted: [batch_size, n_classes]
-        target: [batch_size]
-        """
-        pt = 1/torch.exp(self.cs(predicted,target))
-        #shape: [batch_size]
-        entropy_loss = self.weighted_cs(predicted, target)
-        #shape: [batch_size]
-        focal_loss = ((1-pt)**self.gamma)*entropy_loss
-        #shape: [batch_size]
-        if self.reduction =="none":
-            return focal_loss
-        elif self.reduction == "mean":
-            return focal_loss.mean()
+        self.logits = logits
+        self.reduce = reduce
+
+    def forward(self, inputs, targets):
+        ce_loss = nn.CrossEntropyLoss()
+        ce_loss = ce_loss(inputs, targets)
+        pt = torch.exp(-ce_loss)
+        F_loss = self.alpha * (1-pt)**self.gamma * ce_loss
+
+        if self.reduce:
+            return torch.mean(F_loss)
         else:
-            return focal_loss.sum()
+            return F_loss
+        
+loss_config = {
+    "nll": nll_loss,
+    "crossentropy": crossentropy_loss,
+}

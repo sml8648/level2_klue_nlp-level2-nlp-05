@@ -58,8 +58,8 @@ def tokenized_dataset(dataset, tokenizer):
   return tokenized_sentences
 
 
-def load_train_dataset(tokenizer, train_data):
-  train_dataset = load_data(f"../dataset/train/{train_data}.csv")
+def load_train_dataset(tokenizer, train_path):
+  train_dataset = load_data(train_path)
   train_label = label_to_num(train_dataset['label'].values)
   # tokenizing dataset
   tokenized_train = tokenized_dataset(train_dataset, tokenizer)
@@ -68,8 +68,8 @@ def load_train_dataset(tokenizer, train_data):
   return RE_train_dataset
 
 
-def load_dev_dataset(tokenizer, dev_data):
-  dev_dataset = load_data(f"../dataset/dev/{dev_data}.csv") # validation용 데이터는 따로 만드셔야 합니다.
+def load_dev_dataset(tokenizer, dev_path):
+  dev_dataset = load_data(dev_path) # validation용 데이터는 따로 만드셔야 합니다.
   dev_label = label_to_num(dev_dataset['label'].values)
   # tokenizing dataset
   tokenized_dev = tokenized_dataset(dev_dataset, tokenizer)
@@ -78,8 +78,8 @@ def load_dev_dataset(tokenizer, dev_data):
   return RE_dev_dataset
 
 
-def load_test_dataset(tokenizer, test_data):
-  test_dataset = load_data(f"../dataset/test/{test_data}.csv")
+def load_test_dataset(tokenizer, test_path):
+  test_dataset = load_data(test_path)
   test_label = label_to_num(test_dataset['label'].values)
   # tokenizing dataset
   tokenized_test = tokenized_dataset(test_dataset, tokenizer)
