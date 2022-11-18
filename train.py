@@ -58,9 +58,6 @@ def train(conf):
     RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path)
     RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path)
     RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf.path.test_path)
-    print("kkkkkkkkk", len(RE_train_dataset.pair_dataset[0]))
-    print(RE_train_dataset.pair_dataset[0])
-    print(RE_train_dataset.labels[0])
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
     model = model_arch.Model(conf, len(tokenizer))
