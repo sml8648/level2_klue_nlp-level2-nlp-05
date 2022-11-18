@@ -47,10 +47,8 @@ def train(conf):
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    new_token_count = 0
-    # new_token_count += tokenizer.add_special_tokens()
-    # new_token_count += tokenizer.add_tokens()
-    new_vocab_size = tokenizer.vocab_size + new_token_count
+    # tokenizer.add_special_tokens()
+    # tokenizer.add_tokens()
 
     experiment_name = model_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
     # start_mlflow(experiment_name)
@@ -59,9 +57,7 @@ def train(conf):
     RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path)
     RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path)
 
-    
-
-    model = model_arch.Model(args, conf, new_vocab_size)
+    model = model_arch.Model(args, conf, len(tokenizer))
 
     model.parameters
     model.to(device)

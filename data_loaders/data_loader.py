@@ -36,7 +36,6 @@ def tokenized_dataset(dataset, tokenizer):
 
 def load_train_dataset(tokenizer, train_path):
     train_dataset = pd.read_csv(train_path, index_col=0)
-
     train_label = label_to_num(train_dataset["label"].values)
     # tokenizing dataset
     tokenized_train = tokenized_dataset(train_dataset, tokenizer)
@@ -46,9 +45,7 @@ def load_train_dataset(tokenizer, train_path):
 
 
 def load_dev_dataset(tokenizer, dev_path):
-
     dev_dataset = pd.read_csv(dev_path, index_col=0)
-
     dev_label = label_to_num(dev_dataset["label"].values)
     # tokenizing dataset
     tokenized_dev = tokenized_dataset(dev_dataset, tokenizer)

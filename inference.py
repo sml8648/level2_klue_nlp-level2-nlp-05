@@ -20,18 +20,13 @@ def inference(conf):
 
     model_name = conf.model.model_name
 
-    tokenizer = AutoTokenizer.from_pretrained("klue/roberta-small", use_fast=False)
-
-    new_token_count = 0
-    # new_token_count += tokenizer.add_special_tokens()
-    # new_token_count += tokenizer.add_tokens()
-    new_vocab_size = tokenizer.vocab_size + new_token_count
+    tokenizer = AutoTokenizer.from_pretrained("klue/roberta-small")
 
     ## # loading the model you previously trained
     model_load_path = f"./output/checkpoint-{conf.model.load_checkout}/pytorch_model.bin"  # load model dir.
     checkpoint = torch.load(model_load_path)
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=30)
-    model.resize_token_embeddings(new_vocab_size)
+    model.resize_token_embeddings(len(tokenizer))
     model.load_state_dict(checkpoint, strict=False)
     model.parameters
     model.to(device)
@@ -41,17 +36,17 @@ def inference(conf):
     RE_predict_dataset, predict_id = dataloader.load_predict_dataset(tokenizer, predict_dataset_dir)
 
     # arguments for Trainer
-    test_args = TrainingArguments(output_dir="./prediction", do_train=False, do_predict=True, per_device_eval_batch_size=conf.train.batch_size, dataloader_drop_last=False)
+    test_args = TrainingArguments(output_dir="./prediction", do_train=False, do_predict=True, per_device_eval_batch_size=1, dataloader_drop_last=False)
 
     # init trainer
     trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics)
 
-    outputs = trainer.predict(RE_predict_dataset)
-
-    logits = outputs[1]
+    outputs = trainer.predict(RE_predict_dataset.pair_dataset)
+    # print(outputs)
+    # breakpoint
+    logits = torch.tensor(outputs.predictions)
     prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
-    logits = logits.detach().cpu().numpy()
-    result = np.argmax(logits, axis=-1)
+    result = torch.argmax(logits, axis=-1).detach().cpu().numpy()
 
     pred_answer = result.tolist()
     pred_answer = utils.num_to_label(pred_answer)
