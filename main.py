@@ -10,12 +10,9 @@ from omegaconf import OmegaConf
 # huggingface-cli login 입력 후
 # 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 토큰값을 입력해주세요.
 
-
 if __name__ == "__main__":
-    # 터미널 실행 예시 : python main.py -mt -> train.py 실행
-    #                python main.py -mi -> inference.py 실행
     parser = argparse.ArgumentParser()
-    # 여기서 config 파일 이름 설정하고 실행해주세요.
+    # 여기서 omegaconfig 파일 이름 설정하고 실행해주세요.
     parser.add_argument("--config", "-c", type=str, default="base_config")
     parser.add_argument("--mode", "-m", required=True)
 
@@ -30,13 +27,16 @@ if __name__ == "__main__":
     # torch.cuda.manual_seed_all(SEED)
     # torch.use_deterministic_algorithms(True)
 
+    # 터미널 실행 예시 : python main.py -mt -> train.py 실행
+    #                python main.py -mi -> inference.py 실행
+
     print("실행 중인 config file: ", args.config)
     if args.mode == "train" or args.mode == "t":
         train.train(conf)
 
     elif args.mode == "inference" or args.mode == "i":
         if conf.path.load_model_path is None:
-            print("경로를 입력해주세요")
+            print("로드할 모델의 경로를 입력해주세요.")
         else:
             inference.inference(conf)
     else:

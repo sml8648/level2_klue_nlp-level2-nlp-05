@@ -4,9 +4,7 @@ path:
   test_path: ./dataset/test/test.csv
   predict_path: ./dataset/predict/predict.csv
   # inference를 하는 경우 로드할 모델의 경로를 입력해주세요.
-  load_model_path: /opt/ml/level2_klue_nlp-level2-nlp-05/best_model/klue-roberta-small/18-13-14/pytorch_model.bin
-  # ./output/klue-roberta-small/18-12-08/checkpoint-500/pytorch_model.bin
-  
+  load_model_path: /opt/ml/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-small/18-14-42/checkpoint-500/pytorch_model.bin
 
 model:
   model_name: klue/roberta-small
@@ -16,17 +14,11 @@ train:
   max_epoch: 1
   batch_size: 32
   learning_rate: 3e-5
-  # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
-  loss: focal
-  dropout: 0.2
-  save_steps: 500
-  # eval_steps은 반드시 save_steps의 배수여야 합니다.
+  loss: focal # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
+  save_steps: 250
+  # eval_steps은 반드시 save_steps의 배수여야 합니다!!!!
   eval_steps: 500
   logging_steps: 500
-
-predict:
-  # predict 결과로 생성할 파일명
-  predict_file_name: submit.csv
   
 utils:
   seed: 42
