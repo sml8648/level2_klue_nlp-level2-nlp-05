@@ -114,4 +114,6 @@ __MACOSX/
 output/*
 mlruns/*
 best_model/*
-output
+prediction/*
+step_saved_model/*
+
