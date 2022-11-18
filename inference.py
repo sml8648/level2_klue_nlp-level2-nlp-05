@@ -35,7 +35,7 @@ def inference(conf):
     if conf.model.exp_name == 'Model':
         model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=30)
         model.resize_token_embeddings(len(tokenizer))
-    elif conf.model.exp_name == 'CustomRBBERT':    #RBERT
+    elif conf.model.exp_name == 'CustomRBERT':    #RBERT
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
 

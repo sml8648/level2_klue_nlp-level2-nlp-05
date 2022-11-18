@@ -69,7 +69,7 @@ def train(conf):
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
     if conf.model.exp_name == 'Model':
         model = model_arch.Model(conf, len(tokenizer))
-    elif conf.model.exp_name == 'CustomRBBERT':    #RBERT
+    elif conf.model.exp_name == 'CustomRBERT':    #RBERT
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
 
