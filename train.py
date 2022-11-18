@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 import transformers
 from transformers import DataCollatorWithPadding
 from transformers import AutoTokenizer, Trainer, TrainingArguments, EarlyStoppingCallback
-from transformers import AutoTokenizer, AutoConfig
+from transformers import AutoConfig
 
 import data_loaders.data_loader as dataloader
 import utils.util as utils
@@ -42,39 +42,41 @@ def train(conf):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-  model_name = conf.model.model_name
-  # token_type_ids를 정상적으로 출력하기 위해 use_fast=False로 로드합니다.
-  tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-  data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    model_name = conf.model.model_name
+    # token_type_ids를 정상적으로 출력하기 위해 use_fast=False로 로드합니다.
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    
 
-  # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
-  # new_token_count += tokenizer.add_special_tokens()
-  # new_token_count += tokenizer.add_tokens()
-  new_vocab_size = tokenizer.vocab_size + new_token_count
+    # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
+    # new_token_count += tokenizer.add_special_tokens()
+    # new_token_count += tokenizer.add_tokens()
+    if conf.data.tem: #typed entity token에 쓰이는 스페셜 토큰
+        special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
+        tokenizer.add_special_tokens(special_tokens_dict)
+
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # mlflow 실험명으로 들어갈 이름을 설정합니다.
     experiment_name = model_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
     # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
-    RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path)
-    RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path)
-    RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf.path.test_path)
+    RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf)
+    RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf)
+    RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf)
 
 
-  # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-  model = model_arch.Model(conf, len(tokenizer))
-  
-  #RBERT
-  #model_config = AutoConfig.from_pretrained(model_name)
-  #model = model_arch.CustomRBERT(model_config, model_name)
-  #model.model.resize_token_embeddings(len(tokenizer))
+    # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
+    if conf.model.exp_name == 'Model':
+        model = model_arch.Model(conf, len(tokenizer))
+    elif conf.model.exp_name == 'CustomRBBERT':    #RBERT
+        model_config = AutoConfig.from_pretrained(model_name)
+        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
 
-  model.parameters
-  model.to(device)
-  optimizer = transformers.AdamW(model.parameters(), lr=conf.train.learning_rate)
-  scheduler = OneCycleLR(optimizer, max_lr=conf.train.learning_rate, steps_per_epoch=len(RE_train_dataset)//conf.train.batch_size+1,
-                         pct_start=0.5, epochs=conf.train.max_epoch, anneal_strategy='linear', div_factor=1e100, final_div_factor=1)
+    model.parameters
+    model.to(device)
+    # 다른 옵티마이저를 사용하고 싶으신 경우 이 부분을 바꿔주세요.
+    optimizer = transformers.AdamW(model.parameters(), lr=conf.train.learning_rate)
 
     # 이등변 삼각형 형태로 lr이 서서히 증가했다가 감소하는 스케줄러입니다.
     # 첫시작 lr: learning_rate/div_factor, 마지막 lr: 첫시작 lr/final_div_factor

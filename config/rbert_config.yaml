@@ -7,18 +7,18 @@ path:
   load_model_path: /opt/ml/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-small/18-14-42/checkpoint-500/pytorch_model.bin
 
 model:
-  exp_name: Model #model.py에서 사용할 모델 이름
+  exp_name: CustomRBERT #model.py에서 사용할 모델 이름
   model_name: klue/roberta-small
 
 data:
-  tem: False #typed entity token 사용시 True
+  tem: True #typed entity token 사용시 True
 
 train:
   max_epoch: 1
   batch_size: 32
   learning_rate: 3e-5
   loss: focal # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
-  save_steps: 250
+  save_steps: 500
   # eval_steps은 반드시 save_steps의 배수여야 합니다!!!! """save_steps = n * eval_steps"""
   eval_steps: 500
   logging_steps: 500
