@@ -8,7 +8,6 @@ path:
 
 model:
   model_name: klue/roberta-small
-  load_checkout: 500
 
 train:
   max_epoch: 1
