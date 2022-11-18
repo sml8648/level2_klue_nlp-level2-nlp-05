@@ -165,12 +165,26 @@ def load_dev_dataset(tokenizer, dev_path,args):
   return RE_dev_dataset
 
 
-def load_test_dataset(tokenizer, test_path,args):
-  test_dataset = load_data(test_path,args)
-  test_label = list(map(int,test_dataset['label'].values))
+def load_test_dataset(tokenizer, test_path, args):
+
+  test_dataset = pd.read_csv(test_path, index_col=0)
+
+  test_label = label_to_num(test_dataset["label"].values)
+  tokenized_test = tokenized_dataset(test_dataset, tokenizer, args)
+  RE_test_dataset = RE_Dataset(tokenized_test, test_label)
+  return RE_test_dataset
+
+
+def load_predict_dataset(tokenizer, predict_path, args):
+  predict_dataset = pd.read_csv(predict_path)
+  predict_dataset = preprocessing_dataset(predict_dataset,args)
+  predict_id = predict_dataset["id"]
+  predict_dataset = predict_dataset.drop("id", axis=1)
+  predict_label = list(map(int, predict_dataset["label"].values))
   # tokenizing dataset
-  tokenized_test = tokenized_dataset(test_dataset, tokenizer,args)
-  return test_dataset['id'], tokenized_test, test_label
+  tokenized_predict = tokenized_dataset(predict_dataset, tokenizer, args)
+  RE_predict_dataset = RE_Dataset(tokenized_predict, predict_label)
+  return RE_predict_dataset, predict_id
 
 #typed-entity 토큰 추가
 def add_entity_token(row):

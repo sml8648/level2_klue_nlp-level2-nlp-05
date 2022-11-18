@@ -45,9 +45,11 @@ def train(args, conf):
 
   model_name = conf.model.model_name
   tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+
   if args.tem: #typed entity token에 쓰이는 스페셜 토큰
     special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
     tokenizer.add_special_tokens(special_tokens_dict)
+
   data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
   
   new_token_count = 0
@@ -57,7 +59,7 @@ def train(args, conf):
 
   experiment_name = model_name+'_bs'+str(conf.train.batch_size)+'_ep'+str(conf.train.max_epoch)+'_lr'\
     +str(conf.train.learning_rate)
-  # start_mlflow(experiment_name)
+  start_mlflow(experiment_name)
 
   # load dataset
   RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path, args)
@@ -66,12 +68,12 @@ def train(args, conf):
   device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
   # load model
-  #model = model_arch.Model(args, conf, new_vocab_size)
+  model = model_arch.Model(args, conf, new_vocab_size)
   
   #RBERT
-  model_config = AutoConfig.from_pretrained(model_name)
-  model = model_arch.CustomRBERT(model_config, model_name)
-  model.model.resize_token_embeddings(len(tokenizer))
+  #model_config = AutoConfig.from_pretrained(model_name)
+  #model = model_arch.CustomRBERT(model_config, model_name)
+  #model.model.resize_token_embeddings(len(tokenizer))
 
   model.parameters
   model.to(device)
@@ -117,6 +119,9 @@ def train(args, conf):
   # train model
   trainer.train()
   trainer.save_model('./best_model')
+  RE_test_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.test_path, args)
+  metrics = trainer.evaluate(eval_dataset=RE_test_dataset)
+  print(metrics)
   mlflow.end_run()
   trainer.push_to_hub()
 
