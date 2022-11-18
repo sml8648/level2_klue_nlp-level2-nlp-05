@@ -1,57 +1,45 @@
 import argparse
 import random
 
-import numpy as np
-import pandas as pd
-import torch
-
 import inference
 import train
 
 from omegaconf import OmegaConf
 
+# 허깅페이스에 모델을 저장하고 싶으시면 실행 전 터미널에
+# huggingface-cli login 입력 후
+# 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 토큰값을 입력해주세요.
+
 
 if __name__ == "__main__":
-    # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
-    # 터미널 실행 예시 : python3 run.py --batch_size=64 ...
-    # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
+    # 터미널 실행 예시 : python main.py -mt -> train.py 실행
+    #                python main.py -mi -> inference.py 실행
     parser = argparse.ArgumentParser()
-
+    # 여기서 config 파일 이름 설정하고 실행해주세요.
     parser.add_argument("--config", "-c", type=str, default="base_config")
     parser.add_argument("--mode", "-m", required=True)
-    parser.add_argument(
-        "--saved_model",
-        "-s",
-        default=None,
-        help="저장된 모델의 파일 경로를 입력해주세요. 예시: save_models/klue/roberta-small/epoch=?-step=?.ckpt 또는 save_models/model.pt",
-    )
-    args, _ = parser.parse_known_args()
+
+    args = parser.parse_args()
     conf = OmegaConf.load(f"./config/{args.config}.yaml")
 
-    SEED = conf.utils.seed
-    random.seed(SEED)
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
-    torch.cuda.manual_seed_all(SEED)
-    torch.use_deterministic_algorithms(True)
+    # 시드 설정을 해야될까요?
+    # SEED = conf.utils.seed
+    # random.seed(SEED)
+    # np.random.seed(SEED)
+    # torch.manual_seed(SEED)
+    # torch.cuda.manual_seed_all(SEED)
+    # torch.use_deterministic_algorithms(True)
 
+    print("실행 중인 config file: ", args.config)
     if args.mode == "train" or args.mode == "t":
-        train.train(args, conf)
-
-    elif args.mode == "continue train" or args.mode == "ct":
-        if args.saved_model is None:
-            print("경로를 입력해주세요")
-        else:
-            train.continue_train(args, conf)
+        train.train(conf)
 
     elif args.mode == "inference" or args.mode == "i":
-        if args.saved_model is None:
+        if conf.path.load_model_path is None:
             print("경로를 입력해주세요")
         else:
-            inference.inference(args, conf)
+            inference.inference(conf)
     else:
-        print("모드를 다시 설정해주세요 ")
+        print("실행모드를 다시 입력해주세요.")
         print("train     : t,\ttrain")
-        print("exp       : e,\texp")
         print("inference : i,\tinference")
-        print("continue train : ct,\tcontinue train")
