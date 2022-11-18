@@ -1,7 +1,8 @@
 path:
-  train_path: ../dataset/train/train.csv
-  dev_path: ../dataset/dev/dev.csv
-  test_path: ../dataset/test/test.csv
+  train_path: ./dataset/train/train.csv
+  dev_path: ./dataset/dev/dev.csv
+  test_path: ./dataset/test/test.csv
+  predict_path: ./dataset/predict/predict.csv
   save_path: save_models/
 
 data:
@@ -10,12 +11,13 @@ data:
 
 model:
   model_name: klue/roberta-small
+  load_checkout: 500
 
 train:
   max_epoch: 2
   batch_size: 32
   learning_rate: 1
-  loss: nll
+  loss: focal
   dropout: 0.1
   logging_steps: 5
   

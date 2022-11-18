@@ -68,11 +68,11 @@ def load_test_dataset(tokenizer, test_path):
 
 
 def load_predict_dataset(tokenizer, predict_path):
-
-    predict_dataset = pd.read_csv(predict_path, index_col=0)
-
+    predict_dataset = pd.read_csv(predict_path)
+    predict_id = predict_dataset["id"]
+    predict_dataset = predict_dataset.drop("id", axis=1)
     predict_label = list(map(int, predict_dataset["label"].values))
     # tokenizing dataset
     tokenized_predict = tokenized_dataset(predict_dataset, tokenizer)
     RE_predict_dataset = RE_Dataset(tokenized_predict, predict_label)
-    return RE_predict_dataset, predict_dataset["id"]
+    return RE_predict_dataset, predict_id
