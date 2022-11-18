@@ -45,6 +45,9 @@ def train(args, conf):
 
   model_name = conf.model.model_name
   tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+  if args.tem: #typed entity token에 쓰이는 스페셜 토큰
+    special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
+    tokenizer.add_special_tokens(special_tokens_dict)
   data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
   
   new_token_count = 0
@@ -57,12 +60,18 @@ def train(args, conf):
   # start_mlflow(experiment_name)
 
   # load dataset
-  RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path)
-  RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path)
+  RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path, args)
+  RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path, args)
 
   device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-  model = model_arch.Model(args, conf, new_vocab_size)
+  # load model
+  #model = model_arch.Model(args, conf, new_vocab_size)
+  
+  #RBERT
+  model_config = AutoConfig.from_pretrained(model_name)
+  model = model_arch.CustomRBERT(model_config, model_name)
+  model.model.resize_token_embeddings(len(tokenizer))
 
   model.parameters
   model.to(device)
@@ -121,6 +130,7 @@ if __name__ == '__main__':
   parser.add_argument('--preprocessing', default=False)
   parser.add_argument('--precision', default=32, type=int)
   parser.add_argument('--dropout', default=0.1, type=float)
+  parser.add_argument('--tem', default=True, type=bool)
   args = parser.parse_args()
   
   conf = OmegaConf.load(f"./config/{args.config}.yaml")
