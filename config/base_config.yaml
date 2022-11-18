@@ -18,9 +18,9 @@ train:
   batch_size: 32
   learning_rate: 3e-5
   loss: focal # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
-  save_steps: 250
-  # eval_steps은 반드시 save_steps의 배수여야 합니다!!!! """save_steps = n * eval_steps"""
-  eval_steps: 500
+  save_steps: 500
+  # save_steps은 반드시 eval_steps의 배수여야 합니다!!!! """n * save_steps = eval_steps"""
+  eval_steps: 250
   logging_steps: 500
   
 utils:
