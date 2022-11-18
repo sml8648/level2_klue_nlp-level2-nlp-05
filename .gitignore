@@ -114,4 +114,4 @@ __MACOSX/
 output/*
 mlruns/*
 best_model/*
-
+output
