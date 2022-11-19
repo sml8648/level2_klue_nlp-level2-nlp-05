@@ -12,8 +12,8 @@ class Model(nn.Module):
         self.model.resize_token_embeddings(new_vocab_size)
         self.loss_fct = loss_module.loss_config[conf.train.loss]
 
-    def forward(self, input_ids=None, attention_mask=None, labels=None):
-        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, labels=None):
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
         logits = outputs.logits
         loss = None
         if labels is not None:
