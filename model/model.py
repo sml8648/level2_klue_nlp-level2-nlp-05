@@ -1,4 +1,4 @@
-from transformers import AutoConfig, AutoModel, AutoModelForSequenceClassification
+from transformers import AutoConfig, AutoModel, AutoModelForSequenceClassification, RobertaForSequenceClassification
 from torch import nn
 import model.loss as loss_module
 
@@ -8,7 +8,8 @@ class Model(nn.Module):
         super().__init__()
         self.num_labels = 30
         self.model_name = conf.model.model_name
-        self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=self.num_labels)
+        # self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=self.num_labels)
+        self.model = RobertaForSequenceClassification.from_pretrained(self.model_name, num_labels=self.num_labels)
         self.model.resize_token_embeddings(new_vocab_size)
         self.loss_fct = loss_module.loss_config[conf.train.loss]
 

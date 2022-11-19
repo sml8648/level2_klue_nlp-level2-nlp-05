@@ -4,8 +4,8 @@ from torch.optim.lr_scheduler import OneCycleLR
 # https://huggingface.co/transformers/v3.0.2/_modules/transformers/trainer.html
 # https://huggingface.co/course/chapter3/4
 import transformers
-from transformers import DataCollatorWithPadding
-from transformers import AutoTokenizer, Trainer, TrainingArguments, EarlyStoppingCallback
+from transformers import DataCollatorWithPadding, EarlyStoppingCallback
+from transformers import AutoTokenizer, Trainer, TrainingArguments
 
 import data_loaders.data_loader as dataloader
 import utils.util as utils
@@ -43,6 +43,7 @@ def train(conf):
 
     model_name = conf.model.model_name
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fase=False)
+
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
