@@ -79,6 +79,7 @@ class CustomRBERT(BertPreTrainedModel):
         self.num_labels = 30
         self.config = config
         self.model_name = conf.model.model_name
+        self.loss_fct = loss_module.loss_config[conf.train.loss]
         self.model = AutoModel.from_pretrained(self.model_name,config = self.config) 
         self.model.resize_token_embeddings(new_vocab_size)
 
@@ -139,7 +140,7 @@ class CustomRBERT(BertPreTrainedModel):
 
         # Softmax
         if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
+            loss_fct = self.loss_fct
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             outputs = (loss,) + outputs
 
