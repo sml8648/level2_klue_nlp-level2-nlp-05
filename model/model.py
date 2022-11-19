@@ -9,20 +9,18 @@ class Model(nn.Module):
         self.num_labels = 30
         self.model_name = conf.model.model_name
         self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=self.num_labels)
-
         self.model.resize_token_embeddings(new_vocab_size)
         self.loss_fct = loss_module.loss_config[conf.train.loss]
 
     def forward(self, input_ids=None, attention_mask=None, labels=None):
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
         logits = outputs.logits
-
         loss = None
         if labels is not None:
             loss_fct = self.loss_fct
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-
-        return loss, logits
+            return loss, logits
+        return outputs
 
 
 class CustomModel(nn.Module):

@@ -42,8 +42,7 @@ def train(conf):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model_name = conf.model.model_name
-    # token_type_ids를 정상적으로 출력하기 위해 use_fast=False로 로드합니다.
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
@@ -55,9 +54,9 @@ def train(conf):
     # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
-    RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path)
-    RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path)
-    RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf.path.test_path)
+    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path)
+    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path)
+    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
     model = model_arch.Model(conf, len(tokenizer))
