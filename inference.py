@@ -40,6 +40,7 @@ def inference(conf):
     ## load predict datset
     predict_dataset_dir = conf.path.predict_path
     RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, predict_dataset_dir)
+    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path)
 
     # arguments for Trainer
     # predict data를 padding없이 입력하기 위해 batch_size를 1로 입력합니다.
@@ -48,6 +49,15 @@ def inference(conf):
 
     # init trainer
     trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics)
+
+    # Test 점수 확인
+    metrics = trainer.evaluate(RE_test_dataset)
+    print("Training is complete!")
+    print("==================== Test metric score ====================")
+    print("eval loss: ", metrics["eval_loss"])
+    print("eval auprc: ", metrics["eval_auprc"])
+    print("eval micro f1 score: ", metrics["eval_micro f1 score"])
+
     outputs = trainer.predict(RE_predict_dataset)
     logits = torch.tensor(outputs.predictions)
     prob = F.softmax(logits, dim=-1).detach().cpu().numpy()

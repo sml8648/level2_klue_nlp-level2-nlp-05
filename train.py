@@ -124,6 +124,7 @@ def train(conf):
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
     # mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     # trainer.push_to_hub()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    model.eval()
     metrics = trainer.evaluate(RE_test_dataset)
     print("Training is complete!")
     print("==================== Test metric score ====================")
