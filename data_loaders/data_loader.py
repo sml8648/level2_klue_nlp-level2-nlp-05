@@ -3,6 +3,7 @@ import torch
 from utils.util import label_to_num
 from ast import literal_eval 
 from tqdm.auto import tqdm
+import re
 
 class RE_Dataset(torch.utils.data.Dataset):
     def __init__(self, pair_dataset, labels):
@@ -45,94 +46,73 @@ def add_entity_token(row):
 
     return new_sent
 
-def tokenized_dataset(dataset, tokenizer, tem):
-    if tem ==True:  # typed entity marker 적용시
+def tokenized_dataset(dataset, tokenizer, conf):
+    data = []
+    if conf.data.tem ==True:  # typed entity marker 적용시
         sentence_list = []    
         #typed_entity_marker 사용시 스페셜토큰 추가
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
             sentence_list.append(add_entity_token(item))
 
-        # special token 의 위치를 저장하기 위한 빈 list
-        e_p_list = []
         for sent in tqdm(sentence_list, desc="tokenizing", total=len(sentence_list)):
             # 문장을 tokenize 한 후 tokenized_sent 변수에 할당
             tokenized_sent = tokenizer.tokenize(sent)
+            #스페셜토큰 위치 리스트, 스페셜토큰 리스트, 대체토큰 리스트
+            e_p_list = []
+            s_t_list = ['<e1>','</e1>','<e2>','</e2>','<e3>','</e3>','<e4>','</e4>']
+            rp_t_list = ["@", "@", "#", "#", "‥", "‥", "♀", "♀"]
 
             # 토큰화된 문장에서의 몇번째 위치인지를 확인
-            e11_p = tokenized_sent.index('<e1>')  # the start position of entity1
-            e12_p = tokenized_sent.index('</e1>')  # the end position of entity1
-            e21_p = tokenized_sent.index('<e2>')  # the start position of entity2
-            e22_p = tokenized_sent.index('</e2>')  # the end position of entity2
-            e31_p = tokenized_sent.index('<e3>')  # the start position of entity3
-            e32_p = tokenized_sent.index('</e3>')  # the end position of entity3
-            e41_p = tokenized_sent.index('<e4>')  # the start position of entity4
-            e42_p = tokenized_sent.index('</e4>')  # the end position of entity4
+            for s_t in s_t_list:
+                e_p_list.append(tokenized_sent.index(s_t))
 
-            # Replace the token
-            tokenized_sent[e11_p] = "@"
-            tokenized_sent[e12_p] = "@"
-            tokenized_sent[e21_p] = "#"
-            tokenized_sent[e22_p] = "#"
-            tokenized_sent[e31_p] = "*"
-            tokenized_sent[e32_p] = "*"
-            tokenized_sent[e41_p] = "∧"
-            tokenized_sent[e42_p] = "∧"
+            # 대체토큰으로 교환
+            for s_t, rp_t in zip(s_t_list,rp_t_list):
+                sent = re.sub(s_t,rp_t,sent)
 
             # Add 1 because of the [CLS] token
-            e11_p += 1
-            e12_p += 1
-            e21_p += 1
-            e22_p += 1
-            e31_p += 1
-            e32_p += 1
-            e41_p += 1
-            e42_p += 1
+            for idx in range(len(s_t_list)):
+                e_p_list[idx] += 1
+            
+            # 문장을 tokenizer setting 에 맞게 tokenize 진행
+            tokenized_sentences = tokenizer(
+                sent,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=256,
+                add_special_tokens=True,
+                return_token_type_ids=False if 'roberta' in conf.model.model_name else True, #roberta는 사용안함, inference시 꼭 False로!
+            )
+            #차원 낮추기
+            tokenized_sentences['input_ids'] = tokenized_sentences['input_ids'].squeeze()
+            tokenized_sentences['attention_mask'] = tokenized_sentences['attention_mask'].squeeze()
+            #token type ids 사용시
+            if 'roberta' not in conf.model.model_name:
+                tokenized_sentences['token_type_ids'] = tokenized_sentences['token_type_ids'].squeeze()
+            
+            # special_token 의 위치를 저장하기 위한 배열 생성
+            e1_mask = [0] * tokenized_sentences['attention_mask'].shape[0]
+            e2_mask = [0] * tokenized_sentences['attention_mask'].shape[0]
+            e3_mask = [0] * tokenized_sentences['attention_mask'].shape[0]
+            e4_mask = [0] * tokenized_sentences['attention_mask'].shape[0]
+            
+            e1_mask[e_p_list[0]] = 1
+            e1_mask[e_p_list[1]] = 1
+            e2_mask[e_p_list[2]] = 1
+            e2_mask[e_p_list[3]] = 1
+            e3_mask[e_p_list[4]] = 1
+            e3_mask[e_p_list[5]] = 1
+            e4_mask[e_p_list[6]] = 1
+            e4_mask[e_p_list[7]] = 1
 
-            # 토큰화된 문장에서 special_token 의 위치를 저장
-            e_p_list.append([e11_p, e12_p, e21_p, e22_p, e31_p, e32_p, e41_p, e42_p])
-
-        # 문장을 tokenizer setting 에 맞게 tokenize 진행
-        tokenized_sentences = tokenizer(
-            sentence_list,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=256,
-            add_special_tokens=True,
-            return_token_type_ids=False #roberta는 사용안함, inference시 False로!
-        )
-
-        # special_token 의 위치를 저장하기 위한 배열 생성
-        e1_mask = [[0] * tokenized_sentences['attention_mask'].shape[1]
-                    for _ in range(tokenized_sentences['attention_mask'].shape[0])]
-        e2_mask = [[0] * tokenized_sentences['attention_mask'].shape[1]
-                    for _ in range(tokenized_sentences['attention_mask'].shape[0])]
-        e3_mask = [[0] * tokenized_sentences['attention_mask'].shape[1]
-                    for _ in range(tokenized_sentences['attention_mask'].shape[0])]
-        e4_mask = [[0] * tokenized_sentences['attention_mask'].shape[1]
-                    for _ in range(tokenized_sentences['attention_mask'].shape[0])]
-
-        # special_token 의 위치인 곳에 1을 넣어주고 나머지는 0으로 유지
-        for i, e_p in enumerate(tqdm(e_p_list)):
-            # '#', '*', '@', '∧' 토큰 output vector 만을 사용하는 방법
-            e1_mask[i][e_p[0]] = 1
-            e1_mask[i][e_p[1]] = 1
-            e2_mask[i][e_p[2]] = 1
-            e2_mask[i][e_p[3]] = 1
-            e3_mask[i][e_p[4]] = 1
-            e3_mask[i][e_p[5]] = 1
-            e4_mask[i][e_p[6]] = 1
-            e4_mask[i][e_p[7]] = 1
-
-        # 최종 return 되는 dictionary 형태의 데이터에 special token mask 배열을 tensor 로 변경해 추가
-        tokenized_sentences['e1_mask'] = torch.tensor(e1_mask, dtype=torch.long)
-        tokenized_sentences['e2_mask'] = torch.tensor(e2_mask, dtype=torch.long)
-        tokenized_sentences['e3_mask'] = torch.tensor(e3_mask, dtype=torch.long)
-        tokenized_sentences['e4_mask'] = torch.tensor(e4_mask, dtype=torch.long)
-
-        return tokenized_sentences
+            tokenized_sentences['e1_mask'] = torch.tensor(e1_mask, dtype=torch.long)
+            tokenized_sentences['e2_mask'] = torch.tensor(e2_mask, dtype=torch.long)
+            tokenized_sentences['e3_mask'] = torch.tensor(e3_mask, dtype=torch.long)
+            tokenized_sentences['e4_mask'] = torch.tensor(e4_mask, dtype=torch.long)
+            
+            data.append(tokenized_sentences)
     else:
-        data = []
         for _, item in tqdm(dataset.iterrows(), desc="tokenizing", total=len(dataset)):
 
             subj = eval(item["subject_entity"])["word"]
@@ -145,14 +125,14 @@ def tokenized_dataset(dataset, tokenizer, tem):
 
             data.append(output)
 
-        return data
+    return data
 
 
 
 def load_train_dataset(tokenizer, conf):
     train_dataset = pd.read_csv(conf.path.train_path, index_col=0)
     train_label = label_to_num(train_dataset["label"].values)
-    tokenized_train = tokenized_dataset(train_dataset, tokenizer, conf.data.tem)
+    tokenized_train = tokenized_dataset(train_dataset, tokenizer, conf)
     RE_train_dataset = RE_Dataset(tokenized_train, train_label)
     return RE_train_dataset
 
@@ -160,7 +140,7 @@ def load_train_dataset(tokenizer, conf):
 def load_dev_dataset(tokenizer, conf):
     dev_dataset = pd.read_csv(conf.path.dev_path, index_col=0)
     dev_label = label_to_num(dev_dataset["label"].values)
-    tokenized_dev = tokenized_dataset(dev_dataset, tokenizer, conf.data.tem)
+    tokenized_dev = tokenized_dataset(dev_dataset, tokenizer, conf)
     RE_dev_dataset = RE_Dataset(tokenized_dev, dev_label)
     return RE_dev_dataset
 
@@ -168,7 +148,7 @@ def load_dev_dataset(tokenizer, conf):
 def load_test_dataset(tokenizer, conf):
     test_dataset = pd.read_csv(conf.path.test_path, index_col=0)
     test_label = label_to_num(test_dataset["label"].values)
-    tokenized_test = tokenized_dataset(test_dataset, tokenizer, conf.data.tem)
+    tokenized_test = tokenized_dataset(test_dataset, tokenizer, conf)
     RE_test_dataset = RE_Dataset(tokenized_test, test_label)
     return RE_test_dataset
 
@@ -179,6 +159,6 @@ def load_predict_dataset(tokenizer, conf):
     predict_dataset = predict_dataset.drop("id", axis=1)
     predict_label = list(map(int, predict_dataset["label"].values))
     # tokenizing dataset
-    tokenized_predict = tokenized_dataset(predict_dataset, tokenizer, conf.data.tem)
+    tokenized_predict = tokenized_dataset(predict_dataset, tokenizer, conf)
     RE_predict_dataset = RE_Dataset(tokenized_predict, predict_label)
     return RE_predict_dataset, predict_id
