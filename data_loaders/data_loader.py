@@ -78,7 +78,7 @@ def tokenized_dataset(dataset, tokenizer, conf):
             tokenized_sentences = tokenizer(
                 sent,
                 return_tensors="pt",
-                padding=True,
+                padding="max_length",  # collate 사용불가로 인해 padding 사이즈 맞추기
                 truncation=True,
                 max_length=256,
                 add_special_tokens=True,

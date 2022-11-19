@@ -88,7 +88,7 @@ class CustomRBERT(BertPreTrainedModel):
         self.entity_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, 0.1)
         #concat 후 FC layer
         self.label_classifier = FCLayer(
-            self.config.hidden_size * 3,
+            self.config.hidden_size * 5,
             self.num_labels,
             0.1,
             use_activation=False,

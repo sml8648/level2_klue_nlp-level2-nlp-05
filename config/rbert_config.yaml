@@ -4,8 +4,7 @@ path:
   test_path: ./dataset/test/test.csv
   predict_path: ./dataset/predict/predict.csv
   # inference를 하는 경우 로드할 모델의 경로를 입력해주세요.
-  # inference 시 dataloader - tokenized_dataset에서 tokenize()의 return_token_type_ids를 False로 해줘야합니다.
-  load_model_path: /opt/ml/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-small/18-14-42/checkpoint-500/pytorch_model.bin
+  load_model_path: /opt/ml/github/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-small/19-10-17/checkpoint-500/pytorch_model.bin
 
 model:
   exp_name: CustomRBERT #model.py에서 사용할 모델 이름
