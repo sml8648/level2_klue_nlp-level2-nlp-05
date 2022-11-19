@@ -7,11 +7,16 @@ path:
   load_model_path: /opt/ml/github/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-small/18-17-38/checkpoint-500/pytorch_model.bin
 
 model:
-  exp_name: Model #model.py에서 사용할 모델 이름
+  model_class_name: Model #model.py에서 사용할 모델 이름
+  # Model : Model
+  # CustomRBERT : RBERT(tem=2로 설정할 것)
   model_name: klue/roberta-small
 
 data:
-  tem: False #typed entity token 사용시 True
+  tem: 0 
+  # defalut concat 
+  # 1 Typed entity marker
+  # 2 Typed entity marker + emask (RBERT에서 사용)
 
 train:
   max_epoch: 1

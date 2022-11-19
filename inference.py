@@ -23,7 +23,7 @@ def inference(conf):
     model_name = conf.model.model_name
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    if conf.data.tem: #typed entity token에 쓰이는 스페셜 토큰
+    if conf.data.tem == 1 or conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
         special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
         tokenizer.add_special_tokens(special_tokens_dict)
 
@@ -32,10 +32,10 @@ def inference(conf):
     checkpoint = torch.load(load_model_path)
 
     # 모델 구조를 가져옵니다.
-    if conf.model.exp_name == 'Model':
+    if conf.model.model_class_name == 'Model':
         model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=30)
         model.resize_token_embeddings(len(tokenizer))
-    elif conf.model.exp_name == 'CustomRBERT':    #RBERT
+    elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
 

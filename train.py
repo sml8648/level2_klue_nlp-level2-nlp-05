@@ -49,7 +49,8 @@ def train(conf):
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
     # new_token_count += tokenizer.add_special_tokens()
     # new_token_count += tokenizer.add_tokens()
-    if conf.data.tem: #typed entity token에 쓰이는 스페셜 토큰
+    
+    if conf.data.tem == 1 or conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰 추가
         special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
         tokenizer.add_special_tokens(special_tokens_dict)
 
@@ -65,9 +66,9 @@ def train(conf):
     RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-    if conf.model.exp_name == 'Model':
+    if conf.model.model_class_name == 'Model':
         model = model_arch.Model(conf, len(tokenizer))
-    elif conf.model.exp_name == 'CustomRBERT':    #RBERT
+    elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
 

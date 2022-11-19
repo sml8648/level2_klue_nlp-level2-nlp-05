@@ -46,9 +46,23 @@ def add_entity_token(row):
 
     return new_sent
 
+def replace_entity_token(sent):
+    s_t_list = ['<e1>','</e1>','<e2>','</e2>','<e3>','</e3>','<e4>','</e4>']
+    rp_t_list = ["@", "@", "#", "#", "‥", "‥", "♀", "♀"]
+    for s_t, rp_t in zip(s_t_list,rp_t_list):
+        sent = re.sub(s_t,rp_t,sent)
+    return sent
+
 def tokenized_dataset(dataset, tokenizer, conf):
     data = []
-    if conf.data.tem ==True:  # typed entity marker 적용시
+    if conf.data.tem == 1:  # Typed entity marker만 사용
+        for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
+            sent = add_entity_token(item)
+            sent = replace_entity_token(sent)
+            output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
+            data.append(output)
+
+    elif conf.data.tem == 2:  # typed entity marker + emask
         sentence_list = []    
         #typed_entity_marker 사용시 스페셜토큰 추가
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
