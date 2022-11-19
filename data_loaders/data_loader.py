@@ -31,6 +31,8 @@ def tokenized_dataset(dataset, tokenizer):
         # inference를 하는 경우 return_token_type_ids=False 를 반드시 설정해야 입력차원이 학습 때와 같아져 오류가 발생하지 않습니다!!!!!
         output = tokenizer(concat_entity, item["sentence"], padding=True, truncation=True, max_length=256, add_special_tokens=True)
         data.append(output)
+    print("========== Tokenized data keys ==========")
+    print(data[0].keys())
     return data
 
 
