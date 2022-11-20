@@ -68,12 +68,12 @@ def train(conf):
 
     # 이등변 삼각형 형태로 lr이 서서히 증가했다가 감소하는 스케줄러입니다.
     # 첫시작 lr: learning_rate/div_factor, 마지막 lr: 첫시작 lr/final_div_factor
-    # 학습과정 step수를 계산해 스케줄러에 입력해줍니다. -> total_steps / 2 지점 기준으로 lr가 상승했다가 감소
-    total_steps = len(RE_train_dataset) // conf.train.batch_size + 1 if len(RE_train_dataset) % conf.train.batch_size != 0 else len(RE_train_dataset) // conf.train.batch_size
+    # 학습과정 step수를 계산해 스케줄러에 입력해줍니다. -> steps_per_epoch * epochs / 2 지점 기준으로 lr가 상승했다가 감소
+    steps_per_epoch = len(RE_train_dataset) // conf.train.batch_size + 1 if len(RE_train_dataset) % conf.train.batch_size != 0 else len(RE_train_dataset) // conf.train.batch_size
     scheduler = OneCycleLR(
         optimizer,
         max_lr=conf.train.learning_rate,
-        steps_per_epoch=total_steps,
+        steps_per_epoch=steps_per_epoch,
         pct_start=0.5,
         epochs=conf.train.max_epoch,
         anneal_strategy="linear",
