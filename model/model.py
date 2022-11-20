@@ -87,6 +87,8 @@ class CustomRBERT(BertPreTrainedModel):
         self.cls_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, 0.1)
         #entity 토큰 FC layer
         self.entity_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, 0.1)
+        #entity type 토큰 FC layer
+        #self.entity_type_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, 0.1)
         #concat 후 FC layer
         self.label_classifier = FCLayer(
             self.config.hidden_size * 5,
@@ -132,7 +134,10 @@ class CustomRBERT(BertPreTrainedModel):
         e2_h = self.entity_fc_layer(e2_h)
 
         #e3와 e4는 어떻게 할까?(fc layer 써야하나? e1,e1와 같은거로? 다른거로?
+        e3_h = self.entity_fc_layer(e3_h)
+        e4_h = self.entity_fc_layer(e4_h)
 
+        #concat 후 분류
         concat_h = torch.cat([pooled_output, e1_h, e2_h, e3_h, e4_h], dim=-1)
         logits = self.label_classifier(concat_h)
 
