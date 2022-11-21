@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 # https://huggingface.co/course/chapter3/4
 import transformers
 from transformers import DataCollatorWithPadding, EarlyStoppingCallback
-from transformers import AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
 
 import data_loaders.data_loader as dataloader
 import utils.util as utils
@@ -46,6 +46,10 @@ def train(conf):
     # use_fast=False로 수정할 경우 -> RuntimeError 발생
     # RuntimeError: CUDA error: CUBLAS_STATUS_NOT_INITIALIZED when calling `cublasCreate(handle)`
 
+    if conf.data.tem == 1 or conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰 추가
+        special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
+        tokenizer.add_special_tokens(special_tokens_dict)
+        
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
@@ -57,12 +61,17 @@ def train(conf):
     # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
-    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path)
-    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path)
-    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path)
+    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
+    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path,conf)
+    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-    model = model_arch.Model(conf, len(tokenizer))
+    if conf.model.model_class_name == 'Model':
+        model = model_arch.Model(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
+        model_config = AutoConfig.from_pretrained(model_name)
+        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+
     model.parameters
     model.to(device)
     # 다른 옵티마이저를 사용하고 싶으신 경우 이 부분을 바꿔주세요.

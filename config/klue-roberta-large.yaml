@@ -7,7 +7,17 @@ path:
   load_model_path: /opt/ml/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-large/18-17-53/checkpoint-3200/pytorch_model.bin
 
 model:
+  model_class_name: Model #model.py에서 사용할 모델 이름
+  # Model : Model
+  # CustomRBERT : RBERT(tem=2로 설정할 것)
   model_name: klue/roberta-large
+
+data:
+  tem: 0 
+  # defalut(0)  concat 
+  # 1           Typed entity marker
+  # 2           Typed entity marker + emask (RBERT에서 사용)
+
 
 train:
   max_epoch: 5
@@ -19,7 +29,7 @@ train:
   eval_steps: 250
   logging_steps: 50
   dropout: 0.2
-  rdrop: True
+  rdrop: True # rdrop 사용시 batch_size / 2
   
 utils:
   seed: 42
