@@ -151,8 +151,8 @@ def load_dataset(tokenizer, data_path, conf):
     return RE_dataset
 
 
-def load_predict_dataset(tokenizer, conf):
-    predict_dataset = pd.read_csv(conf.path.predict_path)
+def load_predict_dataset(tokenizer, data_path, conf):
+    predict_dataset = pd.read_csv(data_path)
     predict_label = None
     tokenized_predict = tokenized_dataset(predict_dataset, tokenizer, conf)
     RE_predict_dataset = RE_Dataset(tokenized_predict, predict_label)
