@@ -43,7 +43,6 @@ class Model(nn.Module):
         loss = ce_loss + alpha * kl_loss
         return loss
 
-
 class CustomModel(nn.Module):
     def __init__(self, conf, new_vocab_size):
         super(CustomModel, self).__init__()
