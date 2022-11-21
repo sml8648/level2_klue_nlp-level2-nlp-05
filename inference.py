@@ -1,8 +1,10 @@
 from transformers import AutoTokenizer, Trainer, TrainingArguments
 
+from transformers import AutoConfig
+import model.model as model_arch
+
 import data_loaders.data_loader as dataloader
 import utils.util as utils
-import model.model as model_arch
 
 import pandas as pd
 import torch
@@ -27,12 +29,22 @@ def inference(conf):
     # tokenizer.add_special_tokens()
     # tokenizer.add_tokens()
 
+    if conf.data.tem == 1 or conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
+        special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
+        tokenizer.add_special_tokens(special_tokens_dict)
+
     # .bin을 가져옵니다.
     load_model_path = conf.path.load_model_path
     checkpoint = torch.load(load_model_path)
-    # 모델 구조를 가져옵니다. 반드시 학습할 때 사용했던 동일한 모델 클래스를 사용해야 합니다.
-    model = model_arch.LSTMModel(conf, len(tokenizer))
-    # 모델 구조 위에 checkpoint(파라미터)를 덮어씌웁니다.
+
+    # 모델 구조를 가져옵니다.
+    if conf.model.model_class_name == 'Model':
+        model = model_arch.Model(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
+        model_config = AutoConfig.from_pretrained(model_name)
+        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+
+    # 모델 구조 위에 checkpoint를 덮어씌웁니다.
     # 모델 구조와 checkpoint에 저장되어 있는 파라미터 구조가 다른 경우 에러가 발생합니다.
     model.load_state_dict(checkpoint)
     model.parameters
@@ -40,9 +52,8 @@ def inference(conf):
     model.eval()
 
     ## load predict datset
-    predict_dataset_dir = conf.path.predict_path
-    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, predict_dataset_dir)
-    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path)
+    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path,conf)
+    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
 
     # arguments for Trainer
     # predict data를 padding없이 입력하기 위해 batch_size를 1로 입력합니다.
