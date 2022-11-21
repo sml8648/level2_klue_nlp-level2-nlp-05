@@ -18,6 +18,8 @@ train:
   # save_steps은 반드시 eval_steps의 배수여야 합니다!!!! """n * save_steps = eval_steps"""
   eval_steps: 250
   logging_steps: 500
+  dropout: 0.2
+  rdrop: True
   
 utils:
   seed: 42
