@@ -31,7 +31,7 @@ train:
   eval_steps: 250
   logging_steps: 500
   dropout: 0.2
-  rdrop: True
+  rdrop: True # rdrop 사용시 batch_size / 2
   
 utils:
   seed: 42
