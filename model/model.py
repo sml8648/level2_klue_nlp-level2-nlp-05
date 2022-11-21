@@ -288,9 +288,7 @@ class CustomRBERT(BertPreTrainedModel):
         e1_h = self.entity_fc_layer(e1_h)
         e2_h = self.entity_fc_layer(e2_h)
 
-        #e3와 e4는 어떻게 할까?(fc layer 써야하나? e1,e1와 같은거로? 다른거로?
-        e3_h = self.entity_fc_layer(e3_h)
-        e4_h = self.entity_fc_layer(e4_h)
+        #e3와 e4는 어떻게 할까?(fc layer 써야하나? e1,e1와 같은거로? 다른거로?-> nouse
 
         #concat 후 분류
         concat_h = torch.cat([pooled_output, e1_h, e2_h, e3_h, e4_h], dim=-1)
