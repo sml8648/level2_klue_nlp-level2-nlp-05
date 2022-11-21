@@ -42,7 +42,9 @@ def train(conf):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model_name = conf.model.model_name
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fase=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    # use_fast=False로 수정할 경우 -> RuntimeError 발생
+    # RuntimeError: CUDA error: CUBLAS_STATUS_NOT_INITIALIZED when calling `cublasCreate(handle)`
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
