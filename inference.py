@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 import pickle as pickle
 from datetime import datetime
+from transformers import DataCollatorWithPadding
 
 
 def inference(conf):
@@ -19,7 +20,8 @@ def inference(conf):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model_name = conf.model.model_name
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fase=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
     # tokenizer.add_special_tokens()
@@ -29,7 +31,7 @@ def inference(conf):
     load_model_path = conf.path.load_model_path
     checkpoint = torch.load(load_model_path)
     # 모델 구조를 가져옵니다. 반드시 학습할 때 사용했던 동일한 모델 클래스를 사용해야 합니다.
-    model = model_arch.Model(conf, len(tokenizer))
+    model = model_arch.LSTMModel(conf, len(tokenizer))
     # 모델 구조 위에 checkpoint(파라미터)를 덮어씌웁니다.
     # 모델 구조와 checkpoint에 저장되어 있는 파라미터 구조가 다른 경우 에러가 발생합니다.
     model.load_state_dict(checkpoint)
@@ -45,10 +47,10 @@ def inference(conf):
     # arguments for Trainer
     # predict data를 padding없이 입력하기 위해 batch_size를 1로 입력합니다.
     # batch_size를 키우고 싶은 경우엔 trainer에 collator를 추가해서 실행시켜주세요.
-    test_args = TrainingArguments(output_dir="./prediction", do_train=False, do_predict=True, per_device_eval_batch_size=1, dataloader_drop_last=False)
+    test_args = TrainingArguments(output_dir="./prediction", do_train=False, do_predict=True, per_device_eval_batch_size=16, dataloader_drop_last=False)
 
     # init trainer
-    trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics)
+    trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics, data_collator=data_collator)
 
     # Test 점수 확인
     metrics = trainer.evaluate(RE_test_dataset)
@@ -59,7 +61,7 @@ def inference(conf):
     print("eval micro f1 score: ", metrics["eval_micro f1 score"])
 
     outputs = trainer.predict(RE_predict_dataset)
-    logits = torch.tensor(outputs.predictions)
+    logits = torch.FloatTensor(outputs.predictions)
     prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
     result = torch.argmax(logits, axis=-1).detach().cpu().numpy()
 

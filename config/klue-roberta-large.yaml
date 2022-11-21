@@ -4,7 +4,7 @@ path:
   test_path: ./dataset/test/test.csv
   predict_path: ./dataset/predict/predict.csv
   # inference를 하는 경우 로드할 모델의 경로를 입력해주세요.
-  load_model_path: /opt/ml/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-large/18-17-53/checkpoint-3200/pytorch_model.bin
+  load_model_path: /opt/ml/level2_klue_nlp-level2-nlp-05/best_model/klue-roberta-large/20-13-32/pytorch_model.bin
 
 model:
   model_name: klue/roberta-large
