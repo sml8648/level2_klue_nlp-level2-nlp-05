@@ -43,8 +43,9 @@ def train(conf):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model_name = conf.model.model_name
-    # token_type_ids를 정상적으로 출력하기 위해 use_fast=False로 로드합니다.
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    # use_fast=False로 수정할 경우 -> RuntimeError 발생
+    # RuntimeError: CUDA error: CUBLAS_STATUS_NOT_INITIALIZED when calling `cublasCreate(handle)`
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
     # new_token_count += tokenizer.add_special_tokens()
