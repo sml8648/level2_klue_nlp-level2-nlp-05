@@ -14,9 +14,9 @@ model:
 
 data:
   tem: 0 
-  # defalut concat 
-  # 1 Typed entity marker
-  # 2 Typed entity marker + emask (RBERT에서 사용)
+  # defalut(0)  concat 
+  # 1           Typed entity marker
+  # 2           Typed entity marker + emask (RBERT에서 사용)
 
 train:
   max_epoch: 1
