@@ -4,8 +4,8 @@ from torch.optim.lr_scheduler import OneCycleLR
 # https://huggingface.co/transformers/v3.0.2/_modules/transformers/trainer.html
 # https://huggingface.co/course/chapter3/4
 import transformers
-from transformers import DataCollatorWithPadding
-from transformers import AutoTokenizer, Trainer, TrainingArguments, EarlyStoppingCallback
+from transformers import DataCollatorWithPadding, EarlyStoppingCallback
+from transformers import AutoTokenizer, Trainer, TrainingArguments
 from transformers import AutoConfig
 
 import data_loaders.data_loader as dataloader
@@ -61,9 +61,9 @@ def train(conf):
     # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
-    RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf)
-    RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf)
-    RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf)
+    RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path, conf)
+    RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path, conf)
+    RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf.path.test_path, conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
     if conf.model.model_class_name == 'Model':
@@ -111,7 +111,7 @@ def train(conf):
         # `no`: No evaluation during training.
         # `steps`: Evaluate every `eval_steps`.
         # `epoch`: Evaluate every end of epoch.
-        eval_steps=conf.train.eval_steps,  # 해당 스탭마다 valid set을 이용해서 모델을 평가합니다. 이 값을 기준으로 save_steps 모델이 저장됩니다
+        eval_steps=conf.train.eval_steps,  # 해당 스탭마다 valid set을 이용해서 모델을 평가합니다. 이 값을 기준으로 save_steps 모델이 저장됩니다.
         load_best_model_at_end=True,
         # huggingface hub에 모델을 저장합니다.
         # push_to_hub=True를 설정하는 경우 trainer.save_model() 단계에서 에러가 발생합니다. 둘 중에 하나만 사용해주세요!!!
