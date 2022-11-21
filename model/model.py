@@ -148,7 +148,8 @@ class AuxiliaryModel(CustomModel):
         self.dense = nn.Linear(self.hidden_dim, self.hidden_dim * 4)
         self.dropout = nn.Dropout(conf.train.dropout)
         self.binary_classification = nn.Linear(self.hidden_dim * 4, 2)
-        self.classification = nn.Linear(self.hidden_dim * 4, self.num_labels)
+        self.classification0 = nn.Linear(self.hidden_dim * 4, self.num_labels)
+        self.classification1 = nn.Linear(self.hidden_dim * 4, self.num_labels)
         self.weight = [0.5, 0.5]
     
     def process(self, input_ids=None, attention_mask=None, token_type_ids=None):
@@ -162,9 +163,13 @@ class AuxiliaryModel(CustomModel):
         x = self.dense(x)
         x = self.activation(x)
         x = self.dropout(x)
+
         binary_logits = self.binary_classification(x)
-        logits = self.classification(x)
-        
+        if(torch.argmax(binary_logits) == 0):
+            logits = self.classification0(x)
+        else:
+            logits = self.classification1(x)
+
         return binary_logits, logits
 
     @autocast() 
