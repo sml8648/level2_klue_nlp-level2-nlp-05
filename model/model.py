@@ -58,6 +58,10 @@ class CustomModel(nn.Module):
 
 ## https://github.com/monologg/R-BERT/blob/master/model.py 사용
 class FCLayer(nn.Module):       #fully connected layer
+    '''
+        RBERT emask를 위한 Fully Connected layer
+        데이터 -> BERT 모델 -> emask 평균 -> FC layer -> 분류(FC layer)
+    '''
     def __init__(self, input_dim, output_dim, dropout_rate=0.0, use_activation=True):
         super(FCLayer, self).__init__()
         self.use_activation = use_activation
@@ -73,6 +77,11 @@ class FCLayer(nn.Module):       #fully connected layer
 
 #RBERT
 class CustomRBERT(BertPreTrainedModel):
+    '''
+        RBERT model
+        데이터 -> BERT 모델 -> emask 평균 -> FClayer
+        -> (hidden size, e1, e2, e3, e4 mask concat) -> 분류(FC layer)
+    '''
     def __init__(self, config, conf, new_vocab_size):
         super(CustomRBERT, self).__init__(config)
         self.num_labels = 30
