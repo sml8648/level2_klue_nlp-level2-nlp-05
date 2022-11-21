@@ -61,9 +61,9 @@ def train(conf):
     # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
-    RE_train_dataset = dataloader.load_train_dataset(tokenizer, conf.path.train_path, conf)
-    RE_dev_dataset = dataloader.load_dev_dataset(tokenizer, conf.path.dev_path, conf)
-    RE_test_dataset = dataloader.load_test_dataset(tokenizer, conf.path.test_path, conf)
+    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path, conf)
+    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path, conf)
+    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path, conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
     if conf.model.model_class_name == 'Model':

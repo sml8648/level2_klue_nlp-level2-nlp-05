@@ -50,7 +50,7 @@ def inference(conf):
     model.eval()
 
     ## load predict datset
-    RE_predict_dataset, predict_id = dataloader.load_predict_dataset(tokenizer, conf)
+    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf)
 
     # arguments for Trainer
     # predict data를 padding없이 입력하기 위해 batch_size를 1로 입력합니다.
