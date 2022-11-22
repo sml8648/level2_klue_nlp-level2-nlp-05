@@ -43,6 +43,12 @@ def inference(conf):
     elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+    elif conf.model.model_class_name == 'LSTMModel':    #LSTM
+        model = model_arch.LSTMModel(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModel':    
+        model = model_arch.AuxiliaryModel(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModel2':    
+        model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
 
     # 모델 구조 위에 checkpoint를 덮어씌웁니다.
     # 모델 구조와 checkpoint에 저장되어 있는 파라미터 구조가 다른 경우 에러가 발생합니다.
@@ -64,26 +70,44 @@ def inference(conf):
     trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics, data_collator=data_collator)
 
     # Test 점수 확인
-    metrics = trainer.evaluate(RE_test_dataset)
-    print("Training is complete!")
-    print("==================== Test metric score ====================")
-    print("eval loss: ", metrics["eval_loss"])
-    print("eval auprc: ", metrics["eval_auprc"])
-    print("eval micro f1 score: ", metrics["eval_micro f1 score"])
+    predict_dev = False  # dev set에 대한 prediction 결과값 구하기 (output분석)
+    predict_submit = True # dev set은 evaluation만 하고 submit할 결과값 구하기
+    if(predict_dev):
+        outputs = trainer.predict(RE_test_dataset)
+        logits = torch.FloatTensor(outputs.predictions)
+        prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
+        result = torch.argmax(logits, axis=-1).detach().cpu().numpy()
 
-    outputs = trainer.predict(RE_predict_dataset)
-    logits = torch.FloatTensor(outputs.predictions)
-    prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
-    result = torch.argmax(logits, axis=-1).detach().cpu().numpy()
+        pred_answer = result.tolist()
+        pred_answer = utils.num_to_label(pred_answer)
+        output_prob = prob.tolist()
 
-    pred_answer = result.tolist()
-    pred_answer = utils.num_to_label(pred_answer)
-    output_prob = prob.tolist()
+        output = pd.read_csv("./dataset/test/test.csv")
+        output["pred_label"] = pred_answer
+        output["probs"] = output_prob
 
-    output = pd.read_csv("./prediction/sample_submission.csv")
-    output["pred_label"] = pred_answer
-    output["probs"] = output_prob
+        output.to_csv(f"./prediction/dev_submission_{inference_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
+    if(predict_submit):
+        metrics = trainer.evaluate(RE_test_dataset)
+        print("Training is complete!")
+        print("==================== Test metric score ====================")
+        print("eval loss: ", metrics["eval_loss"])
+        print("eval auprc: ", metrics["eval_auprc"])
+        print("eval micro f1 score: ", metrics["eval_micro f1 score"])
 
-    output.to_csv(f"./prediction/submission_{inference_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
+        outputs = trainer.predict(RE_predict_dataset)
+        logits = torch.FloatTensor(outputs.predictions)
+        prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
+        result = torch.argmax(logits, axis=-1).detach().cpu().numpy()
+
+        pred_answer = result.tolist()
+        pred_answer = utils.num_to_label(pred_answer)
+        output_prob = prob.tolist()
+
+        output = pd.read_csv("./prediction/sample_submission.csv")
+        output["pred_label"] = pred_answer
+        output["probs"] = output_prob
+
+        output.to_csv(f"./prediction/submission_{inference_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
     #### 필수!! ##############################################
     print("==================== Inference finish! ====================")
