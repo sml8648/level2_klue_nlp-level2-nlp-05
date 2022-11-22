@@ -10,6 +10,7 @@ from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
 import data_loaders.data_loader as dataloader
 import utils.util as utils
 import model.model as model_arch
+from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 
 import mlflow
 import mlflow.sklearn
@@ -19,6 +20,30 @@ from datetime import datetime
 import re
 import os
 from omegaconf import OmegaConf
+from collections import defaultdict
+
+
+class MyDataCollatorWithPadding(DataCollatorWithPadding):
+    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+        max_len = 0
+        for i in features:
+            if len(i['input_ids']) > max_len : max_len = len(i['input_ids'])
+
+        batch = defaultdict(list)
+        for item in features:
+            for k in item:
+                if('label' not in k):
+                    padding_len = max_len - item[k].size(0)
+                    if(k == 'input_ids'):
+                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id]*padding_len)), dim=0)
+                    else:
+                        item[k] = torch.cat((item[k], torch.tensor([0]*padding_len)), dim=0)
+                batch[k].append(item[k])
+                
+        for k in batch:
+            batch[k] = torch.stack(batch[k], dim=0)
+            batch[k] = batch[k].to(torch.long)
+        return batch
 
 
 def start_mlflow(experiment_name):
@@ -52,7 +77,7 @@ def train(conf):
         special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
         tokenizer.add_special_tokens(special_tokens_dict)
         
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
     # tokenizer.add_special_tokens()
@@ -79,6 +104,9 @@ def train(conf):
         model = model_arch.AuxiliaryModel(conf, len(tokenizer))
     elif conf.model.model_class_name == 'AuxiliaryModel2':    
         model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModelWithEntity':    
+        model = model_arch.AuxiliaryModelWithEntity(conf, len(tokenizer))
+    
 
     model.parameters
     model.to(device)

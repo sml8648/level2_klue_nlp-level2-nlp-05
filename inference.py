@@ -13,6 +13,31 @@ import torch.nn.functional as F
 import pickle as pickle
 from datetime import datetime
 from transformers import DataCollatorWithPadding
+from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
+from collections import defaultdict
+
+
+class MyDataCollatorWithPadding(DataCollatorWithPadding):
+    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+        max_len = 0
+        for i in features:
+            if len(i['input_ids']) > max_len : max_len = len(i['input_ids'])
+
+        batch = defaultdict(list)
+        for item in features:
+            for k in item:
+                if('label' not in k):
+                    padding_len = max_len - item[k].size(0)
+                    if(k == 'input_ids'):
+                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id]*padding_len)), dim=0)
+                    else:
+                        item[k] = torch.cat((item[k], torch.tensor([0]*padding_len)), dim=0)
+                batch[k].append(item[k])
+                
+        for k in batch:
+            batch[k] = torch.stack(batch[k], dim=0)
+            batch[k] = batch[k].to(torch.long)
+        return batch
 
 
 def inference(conf):
@@ -23,7 +48,7 @@ def inference(conf):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model_name = conf.model.model_name
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
     # tokenizer.add_special_tokens()
