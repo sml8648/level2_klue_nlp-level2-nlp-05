@@ -20,24 +20,25 @@ class RE_Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.pair_dataset)
 
+def add_entity_type_token_punct(row):
+    sent = row['sentence']      #sentence
+    se = literal_eval(row['subject_entity'])  #subject entity
+    oe = literal_eval(row['object_entity'])   #object entity
+    new_sent = ''
+    if se['start_idx'] < oe['start_idx']: #문장에 subject -> object 순으로 등장
+        new_sent = sent[:se['start_idx']] + '@*'+se['type']+'*' + sent[se['start_idx']:se['end_idx'] + 1] + '@'  \
+                    + sent[se['end_idx'] + 1:oe['start_idx']]+ '#%'+oe['type']+'%'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '#' + sent[oe['end_idx'] + 1:]
+    else:#문장에 object -> subject 순으로 등장
+        new_sent = sent[:oe['start_idx']]+ '#%'+oe['type']+'%'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '#' \
+                    + sent[oe['end_idx'] + 1:se['start_idx']] + '@*'+se['type']+'*' + sent[se['start_idx']:se['end_idx'] + 1] + '@' + sent[se['end_idx'] + 1:]
+    return new_sent
+
 #typed-entity 토큰 추가
-def add_entity_token(row):
-    '''
-    before
-    〈Something〉는 조지 해리슨이 쓰고 비틀즈가 1969년 앨범 《Abbey Road》에 담은 노래다.,
-    "{'word': '비틀즈', 'start_idx': 24, 'end_idx': 26, 'type': 'ORG'}",
-    "{'word': '조지 해리슨', 'start_idx': 13, 'end_idx': 18, 'type': 'PER'}"
-    
-    after
-    〈Something〉는 <e2> <e3> PER </e3> 조지 해리슨 </e2> 이 쓰고 <e1> <e3> ORG </e3> 비틀즈 </e1> 가 1969년 앨범 《Abbey Road》에 담은 노래다
-    '''
+def add_entity_token(row):    
     sent = row['sentence']      #sentence
     se = literal_eval(row['subject_entity'])  #subject entity
     oe = literal_eval(row['object_entity'])   #object entity
 
-    # 새로운 new_sent 변수에 special_token 추가해서 저장
-    # 이때, typed_entity_marker 를 적용할 수 있도록 <e1>, </e1>, <e2>, </e2>, <e3>, </e3>, <e4>, </e4> token 추가하고
-    # subject_entity 와 object_entity 의 type 을 new_sent 에 추가해줌
     new_sent = ''
     if se['start_idx'] < oe['start_idx']: #문장에 subject -> object 순으로 등장
         new_sent = sent[:se['start_idx']] + '<e1> <e3> '+se['type']+' </e3> ' + sent[se['start_idx']:se['end_idx'] + 1] + ' </e1> '  \
@@ -47,20 +48,12 @@ def add_entity_token(row):
                     + sent[oe['end_idx'] + 1:se['start_idx']] + '<e1> <e3> '+se['type']+' </e3> ' + sent[se['start_idx']:se['end_idx'] + 1] + ' </e1> ' + sent[se['end_idx'] + 1:]
 
     return new_sent
-
-def replace_entity_token(sent):
-    s_t_list = ['<e1>','</e1>','<e2>','</e2>','<e3>','</e3>','<e4>','</e4>']
-    rp_t_list = ["@", "@", "#", "#", "‥", "‥", "♀", "♀"]
-    for s_t, rp_t in zip(s_t_list,rp_t_list):
-        sent = re.sub(s_t,rp_t,sent)
-    return sent
-
+    
 def tokenized_dataset(dataset, tokenizer,conf):
     data = []
     if conf.data.tem == 1:  # Typed entity marker만 사용
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
             sent = add_entity_token(item)
-            sent = replace_entity_token(sent)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             data.append(output)
 
@@ -76,7 +69,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
             #스페셜토큰 위치 리스트, 스페셜토큰 리스트, 대체토큰 리스트
             e_p_list = []
             s_t_list = ['<e1>','</e1>','<e2>','</e2>','<e3>','</e3>','<e4>','</e4>']
-            rp_t_list = ["@", "@", "#", "#", "‥", "‥", "♀", "♀"]
+            rp_t_list = ["@", "@", "#", "#", "*", "*", "%", "%"]
 
             # 토큰화된 문장에서의 몇번째 위치인지를 확인
             for s_t in s_t_list:

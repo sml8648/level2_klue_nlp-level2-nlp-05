@@ -209,7 +209,7 @@ class FCLayer(nn.Module):       #fully connected layer
         RBERT emask를 위한 Fully Connected layer
         데이터 -> BERT 모델 -> emask 평균 -> FC layer -> 분류(FC layer)
     '''
-    def __init__(self, input_dim, output_dim, dropout_rate=0.0, use_activation=True):
+    def __init__(self, input_dim, output_dim, dropout_rate=0.1, use_activation=True):
         super(FCLayer, self).__init__()
         self.use_activation = use_activation
         self.dropout = nn.Dropout(dropout_rate)
