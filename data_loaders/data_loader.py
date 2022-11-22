@@ -61,7 +61,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
         sentence_list = []    
         #typed_entity_marker 사용시 스페셜토큰 추가
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sentence_list.append(add_entity_token(item))
+            sentence_list.append(add_entity_type_token_punct(item))
 
         for sent in tqdm(sentence_list, desc="tokenizing", total=len(sentence_list)):
             # 문장을 tokenize 한 후 tokenized_sent 변수에 할당
