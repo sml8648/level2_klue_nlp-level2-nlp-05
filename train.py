@@ -17,6 +17,8 @@ from azureml.core import Workspace
 
 from datetime import datetime
 import re
+import os
+from omegaconf import OmegaConf
 
 
 def start_mlflow(experiment_name):
@@ -57,8 +59,8 @@ def train(conf):
     # tokenizer.add_tokens()
 
     # mlflow 실험명으로 들어갈 이름을 설정합니다.
-    experiment_name = model_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
+    start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
@@ -71,6 +73,12 @@ def train(conf):
     elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+    elif conf.model.model_class_name == 'LSTMModel':    #LSTM
+        model = model_arch.LSTMModel(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModel':    
+        model = model_arch.AuxiliaryModel(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModel2':    
+        model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
 
     model.parameters
     model.to(device)
@@ -133,6 +141,7 @@ def train(conf):
     # train 과정에서 가장 평가 점수가 좋은 모델을 저장합니다.
     # best_model 폴더에 저장됩니다.
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
+    
     # mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     # trainer.push_to_hub()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     model.eval()
@@ -142,3 +151,9 @@ def train(conf):
     print("eval loss: ", metrics["eval_loss"])
     print("eval auprc: ", metrics["eval_auprc"])
     print("eval micro f1 score: ", metrics["eval_micro f1 score"])
+    
+    # best_model 저장할 때 사용했던 config파일도 같이 저장합니다.
+    if not os.path.exists(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}"):
+        os.makedirs(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
+    with open(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/config.yaml", "w+") as fp:
+        OmegaConf.save(config=conf, f=fp.name)
