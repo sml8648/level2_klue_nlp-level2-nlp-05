@@ -233,22 +233,23 @@ class CustomRBERT(BertPreTrainedModel):
         super(CustomRBERT, self).__init__(config)
         self.num_labels = 30
         self.config = config
+        self.conf = conf
         self.model_name = conf.model.model_name
         self.loss_fct = loss_module.loss_config[conf.train.loss]
         self.model = AutoModel.from_pretrained(self.model_name,config = self.config) 
         self.model.resize_token_embeddings(new_vocab_size)
 
         #cls 토큰 FC layer
-        self.cls_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, 0.1)
+        self.cls_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, conf.train.dropout)
         #entity 토큰 FC layer
-        self.entity_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, 0.1)
+        self.entity_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, conf.train.dropout)
         #entity type 토큰 FC layer
-        #self.entity_type_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, 0.1)
+        #self.entity_type_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, conf.train.dropout)
         #concat 후 FC layer
         self.label_classifier = FCLayer(
             self.config.hidden_size * 5,
             self.num_labels,
-            0.1,
+            conf.train.dropout,
             use_activation=False,
         )
 
@@ -269,7 +270,7 @@ class CustomRBERT(BertPreTrainedModel):
         avg_vector = sum_vector.float() / length_tensor.float()  # broadcasting
         return avg_vector
 
-    def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None,
+    def process(self, input_ids, attention_mask, token_type_ids=None,
                 e1_mask=None, e2_mask=None, e3_mask=None, e4_mask=None):
         outputs = self.model(
             input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids
@@ -293,13 +294,36 @@ class CustomRBERT(BertPreTrainedModel):
         #concat 후 분류
         concat_h = torch.cat([pooled_output, e1_h, e2_h, e3_h, e4_h], dim=-1)
         logits = self.label_classifier(concat_h)
-
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
-
-        # Softmax
+        return outputs  # (hidden_states), (attentions)
+    
+    @autocast() 
+    def forward(self, input_ids, attention_mask, token_type_ids=None, labels=None,
+                e1_mask=None, e2_mask=None, e3_mask=None, e4_mask=None):
+        outputs = self.process(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids,
+                e1_mask=e1_mask, e2_mask=e2_mask, e3_mask=e3_mask, e4_mask=e4_mask)
+        logits = outputs[0]
+        loss = None
         if labels is not None:
             loss_fct = self.loss_fct
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            outputs = (loss,) + outputs
 
-        return outputs  # (loss), logits, (hidden_states), (attentions)
+            if(self.conf.train.rdrop):
+                loss = self.rdrop(logits, labels, input_ids, attention_mask, token_type_ids, e1_mask, e2_mask, e3_mask, e4_mask)
+            
+            outputs = (loss,) + outputs
+        return outputs
+
+    def rdrop(self, logits, labels, input_ids, attention_mask, token_type_ids, e1_mask, e2_mask, e3_mask, e4_mask, alpha=0.1):
+        outputs2 = self.process(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids,
+                e1_mask=e1_mask, e2_mask=e2_mask, e3_mask=e3_mask, e4_mask=e4_mask)
+        logits2 = outputs2[0]
+        # cross entropy loss for classifier
+        logits = logits.view(-1, self.num_labels)
+        logits2 = logits2.view(-1, self.num_labels)
+        
+        ce_loss = 0.5 * (self.loss_fct(logits, labels.view(-1)) + self.loss_fct(logits2, labels.view(-1)))
+        kl_loss = loss_module.compute_kl_loss(logits, logits2)
+        # carefully choose hyper-parameters
+        loss = ce_loss + alpha * kl_loss
+        return loss
