@@ -6,6 +6,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 import transformers
 from transformers import DataCollatorWithPadding, EarlyStoppingCallback
 from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
+from transformers import AutoModelForSequenceClassification
 
 import data_loaders.data_loader as dataloader
 import utils.util as utils
@@ -85,7 +86,7 @@ def train(conf):
 
     # mlflow 실험명으로 들어갈 이름을 설정합니다.
     experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
@@ -106,7 +107,11 @@ def train(conf):
         model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
     elif conf.model.model_class_name == 'AuxiliaryModelWithEntity':    
         model = model_arch.AuxiliaryModelWithEntity(conf, len(tokenizer))
-    
+    elif conf.model.model_class_name == 'TAPT' :
+        model = AutoModelForSequenceClassification.from_pretrained(
+        conf.path.load_pretrained_model_path, num_labels=30
+        )
+    ### Refactoring 필요!!
 
     model.parameters
     model.to(device)
