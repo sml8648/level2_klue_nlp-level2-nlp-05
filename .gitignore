@@ -9,6 +9,9 @@ __pycache__/
 # log
 logs/
 
+# pretrained
+klue-roberta-pretrained/
+
 # Distribution / packaging
 .Python
 env/
