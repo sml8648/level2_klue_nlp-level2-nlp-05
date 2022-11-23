@@ -48,6 +48,35 @@ def add_entity_token(row):
 
     return new_sent
 
+
+def add_entity_token_without_type(row):
+    '''
+    before
+    〈Something〉는 조지 해리슨이 쓰고 비틀즈가 1969년 앨범 《Abbey Road》에 담은 노래다.,
+    "{'word': '비틀즈', 'start_idx': 24, 'end_idx': 26, 'type': 'ORG'}",
+    "{'word': '조지 해리슨', 'start_idx': 13, 'end_idx': 18, 'type': 'PER'}"
+    
+    after
+    〈Something〉는 <e2> 조지 해리슨 </e2> 이 쓰고 <e1> 비틀즈 </e1> 가 1969년 앨범 《Abbey Road》에 담은 노래다
+    '''
+    sent = row['sentence']      #sentence
+    se = literal_eval(row['subject_entity'])  #subject entity
+    oe = literal_eval(row['object_entity'])   #object entity
+
+    # 새로운 new_sent 변수에 special_token 추가해서 저장
+    # 이때, typed_entity_marker 를 적용할 수 있도록 <e1>, </e1>, <e2>, </e2>, <e3>, </e3>, <e4>, </e4> token 추가하고
+    # subject_entity 와 object_entity 의 type 을 new_sent 에 추가해줌
+    new_sent = ''
+    if se['start_idx'] < oe['start_idx']: #문장에 subject -> object 순으로 등장
+        new_sent = sent[:se['start_idx']] + '<e1>' + sent[se['start_idx']:se['end_idx'] + 1] + ' </e1> '  \
+                    + sent[se['end_idx'] + 1:oe['start_idx']]+ '<e2>'+ sent[oe['start_idx']:oe['end_idx'] + 1] + ' </e2> ' + sent[oe['end_idx'] + 1:]
+    else:#문장에 object -> subject 순으로 등장
+        new_sent = sent[:oe['start_idx']]+ '<e2>'+ sent[oe['start_idx']:oe['end_idx'] + 1] + ' </e2> ' \
+                    + sent[oe['end_idx'] + 1:se['start_idx']] + '<e1>' + sent[se['start_idx']:se['end_idx'] + 1] + ' </e1> ' + sent[se['end_idx'] + 1:]
+
+    return new_sent
+
+
 def replace_entity_token(sent):
     s_t_list = ['<e1>','</e1>','<e2>','</e2>','<e3>','</e3>','<e4>','</e4>']
     rp_t_list = ["@", "@", "#", "#", "‥", "‥", "♀", "♀"]
@@ -57,7 +86,29 @@ def replace_entity_token(sent):
 
 def tokenized_dataset(dataset, tokenizer,conf):
     data = []
-    if conf.data.tem == 1:  # Typed entity marker만 사용
+    if conf.data.tem == 3:  # entity marker만 사용
+        for _, item in tqdm(dataset.iterrows(), desc="add_entity_token & tokenizing", total=len(dataset)):
+            sent = add_entity_token_without_type(item)
+            sent = replace_entity_token(sent)
+            output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
+            sub_token = '@'
+            obj_token = '#'
+            sub_id = tokenizer.convert_tokens_to_ids(sub_token)
+            obj_id = tokenizer.convert_tokens_to_ids(obj_token)
+            found = {sub_id:0, obj_id:0}
+            entity_token = []
+            for input_id in output["input_ids"]:
+                if input_id in found:
+                    found[input_id] += 1
+                    entity_token.append(0)
+                elif(found[sub_id]==1 or found[obj_id]==1):
+                    entity_token.append(1)
+                else: entity_token.append(0)
+
+            output['entity_token'] = entity_token
+            data.append(output)
+
+    elif conf.data.tem == 1:  # Typed entity marker만 사용
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
             sent = add_entity_token(item)
             sent = replace_entity_token(sent)
@@ -94,7 +145,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
             tokenized_sentences = tokenizer(
                 sent,
                 return_tensors="pt",
-                padding="max_length",  # collate 사용불가로 인해 padding 사이즈 맞추기
+                padding=True,  # collate 사용불가로 인해 padding 사이즈 맞추기
                 truncation=True,
                 max_length=256,
                 add_special_tokens=True,
