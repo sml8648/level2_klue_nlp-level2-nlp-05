@@ -41,8 +41,7 @@ def inference(conf):
     if conf.model.model_class_name == 'Model':
         model = model_arch.Model(conf, len(tokenizer))
     elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
-        model_config = AutoConfig.from_pretrained(model_name)
-        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+        model = model_arch.CustomRBERT(conf, len(tokenizer))
 
     # 모델 구조 위에 checkpoint를 덮어씌웁니다.
     # 모델 구조와 checkpoint에 저장되어 있는 파라미터 구조가 다른 경우 에러가 발생합니다.

@@ -20,7 +20,11 @@ class RE_Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.pair_dataset)
 
+#typed-entity 특수기호 추가
 def add_entity_type_token_punct(row):
+    '''
+    〈Something〉는 #%PER%조지 해리슨#이 쓰고 @ORG비틀즈@가 1969년 앨범 《Abbey Road》에 담은 노래다.
+    '''
     sent = row['sentence']      #sentence
     se = literal_eval(row['subject_entity'])  #subject entity
     oe = literal_eval(row['object_entity'])   #object entity
@@ -33,19 +37,22 @@ def add_entity_type_token_punct(row):
                     + sent[oe['end_idx'] + 1:se['start_idx']] + '@*'+se['type']+'*' + sent[se['start_idx']:se['end_idx'] + 1] + '@' + sent[se['end_idx'] + 1:]
     return new_sent
 
-#typed-entity 토큰 추가
-def add_entity_token(row):    
+#typed-entity 스페셜 토큰 추가
+def add_entity_token(row):   
+    '''
+    〈Something〉는 <e2><e4>PER</e4>조지 해리슨</e2>이 쓰고 <e1><e3>ORG</e3>비틀즈</e1>가 1969년 앨범 《Abbey Road》에 담은 노래다.
+    '''
     sent = row['sentence']      #sentence
     se = literal_eval(row['subject_entity'])  #subject entity
     oe = literal_eval(row['object_entity'])   #object entity
 
     new_sent = ''
     if se['start_idx'] < oe['start_idx']: #문장에 subject -> object 순으로 등장
-        new_sent = sent[:se['start_idx']] + '<e1> <e3> '+se['type']+' </e3> ' + sent[se['start_idx']:se['end_idx'] + 1] + ' </e1> '  \
-                    + sent[se['end_idx'] + 1:oe['start_idx']]+ '<e2> <e4> '+oe['type']+' </e4> '+ sent[oe['start_idx']:oe['end_idx'] + 1] + ' </e2> ' + sent[oe['end_idx'] + 1:]
+        new_sent = sent[:se['start_idx']] + '<e1><e3>'+se['type']+'</e3>' + sent[se['start_idx']:se['end_idx'] + 1] + '</e1>'  \
+                    + sent[se['end_idx'] + 1:oe['start_idx']]+ '<e2><e4>'+oe['type']+'</e4>'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '</e2>' + sent[oe['end_idx'] + 1:]
     else:#문장에 object -> subject 순으로 등장
-        new_sent = sent[:oe['start_idx']]+ '<e2> <e4> '+oe['type']+' </e4> '+ sent[oe['start_idx']:oe['end_idx'] + 1] + ' </e2> ' \
-                    + sent[oe['end_idx'] + 1:se['start_idx']] + '<e1> <e3> '+se['type']+' </e3> ' + sent[se['start_idx']:se['end_idx'] + 1] + ' </e1> ' + sent[se['end_idx'] + 1:]
+        new_sent = sent[:oe['start_idx']]+ '<e2><e4>'+oe['type']+'</e4>'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '</e2>' \
+                    + sent[oe['end_idx'] + 1:se['start_idx']] + '<e1><e3>'+se['type']+'</e3>' + sent[se['start_idx']:se['end_idx'] + 1] + '</e1>' + sent[se['end_idx'] + 1:]
 
     return new_sent
     
@@ -55,9 +62,16 @@ def tokenized_dataset(dataset, tokenizer,conf):
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
             sent = add_entity_type_token_punct(item)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
-            data.append(output)
+            data.append(output)     #[{input_ids, attention_mask, token_type_ids}]
 
     elif conf.data.tem == 2:  # typed entity marker + emask
+        '''
+        1. 스페셜 토큰을 사용하여 typed entity marker 표시
+        2. 스페셜 토큰의 위치를 저장 
+        3. 스페셜 토큰을 특수기호로 치환
+        4. 토크나이징
+        5. 토큰화한 길이랑 같은 길이면서, (2번에서 기록한)스페셜 토큰의 위치는 1, 나머지는 0인 emask 생성
+        '''
         sentence_list = []    
         #typed_entity_marker 사용시 스페셜토큰 추가
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
@@ -120,7 +134,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
             tokenized_sentences['e3_mask'] = torch.tensor(e3_mask, dtype=torch.long)
             tokenized_sentences['e4_mask'] = torch.tensor(e4_mask, dtype=torch.long)
             
-            data.append(tokenized_sentences)
+            data.append(tokenized_sentences)    #[{input_ids, attention_mask, token_type_ids, e1mask, e2mask, e3mask, e4mask}]
     else:
         for _, item in tqdm(dataset.iterrows(), desc="tokenizing", total=len(dataset)):
 

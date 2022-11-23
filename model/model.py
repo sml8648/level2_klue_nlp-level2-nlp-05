@@ -223,21 +223,21 @@ class FCLayer(nn.Module):       #fully connected layer
         return self.linear(x)
 
 #RBERT
-class CustomRBERT(BertPreTrainedModel):
+class CustomRBERT(nn.Module):
     '''
         RBERT model
         데이터 -> BERT 모델 -> emask 평균 -> FClayer
         -> (hidden size, e1, e2, e3, e4 mask concat) -> 분류(FC layer)
     '''
-    def __init__(self, config, conf, new_vocab_size):
-        super(CustomRBERT, self).__init__(config)
+    def __init__(self, conf, new_vocab_size):
+        super(CustomRBERT, self).__init__()
         self.num_labels = 30
-        self.config = config
         self.conf = conf
         self.model_name = conf.model.model_name
-        self.loss_fct = loss_module.loss_config[conf.train.loss]
-        self.model = AutoModel.from_pretrained(self.model_name,config = self.config) 
+        self.config = AutoConfig.from_pretrained(self.model_name)
+        self.model = AutoModel.from_pretrained(self.model_name) 
         self.model.resize_token_embeddings(new_vocab_size)
+        self.loss_fct = loss_module.loss_config[conf.train.loss]
 
         #cls 토큰 FC layer
         self.cls_fc_layer = FCLayer(self.config.hidden_size, self.config.hidden_size, conf.train.dropout)

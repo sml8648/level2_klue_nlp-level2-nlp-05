@@ -69,8 +69,7 @@ def train(conf):
     if conf.model.model_class_name == 'Model':
         model = model_arch.Model(conf, len(tokenizer))
     elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
-        model_config = AutoConfig.from_pretrained(model_name)
-        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+        model = model_arch.CustomRBERT(conf, len(tokenizer))
 
     model.parameters
     model.to(device)
