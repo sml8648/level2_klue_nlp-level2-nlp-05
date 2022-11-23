@@ -144,7 +144,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
     return data
 
 
-def load_dataset(tokenizer, data_path,conf):
+def load_dataset(tokenizer, data_path, conf):
     dataset = pd.read_csv(data_path, index_col=0)
     label = label_to_num(dataset["label"].values)
     tokenized_test = tokenized_dataset(dataset, tokenizer, conf)
