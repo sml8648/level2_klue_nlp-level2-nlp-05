@@ -20,47 +20,33 @@ class RE_Dataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.pair_dataset)
 
-#typed-entity 특수기호 추가
-def add_entity_type_token_punct(row):
-    '''
-    〈Something〉는 #%PER%조지 해리슨#이 쓰고 @ORG비틀즈@가 1969년 앨범 《Abbey Road》에 담은 노래다.
-    '''
-    sent = row['sentence']      #sentence
-    se = literal_eval(row['subject_entity'])  #subject entity
-    oe = literal_eval(row['object_entity'])   #object entity
-    new_sent = ''
-    if se['start_idx'] < oe['start_idx']: #문장에 subject -> object 순으로 등장
-        new_sent = sent[:se['start_idx']] + '@*'+se['type']+'*' + sent[se['start_idx']:se['end_idx'] + 1] + '@'  \
-                    + sent[se['end_idx'] + 1:oe['start_idx']]+ '#%'+oe['type']+'%'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '#' + sent[oe['end_idx'] + 1:]
-    else:#문장에 object -> subject 순으로 등장
-        new_sent = sent[:oe['start_idx']]+ '#%'+oe['type']+'%'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '#' \
-                    + sent[oe['end_idx'] + 1:se['start_idx']] + '@*'+se['type']+'*' + sent[se['start_idx']:se['end_idx'] + 1] + '@' + sent[se['end_idx'] + 1:]
-    return new_sent
-
 #typed-entity 스페셜 토큰 추가
-def add_entity_token(row):   
+def add_entity_token(row, tem):   
     '''
     〈Something〉는 <e2><e4>PER</e4>조지 해리슨</e2>이 쓰고 <e1><e3>ORG</e3>비틀즈</e1>가 1969년 앨범 《Abbey Road》에 담은 노래다.
     '''
+    #entity token list. tem == 1 : 특수기호 토큰, tem == 2 : 스페셜 토큰
+    etl=[[],["@", "@", "#", "#", "*", "*", "%", "%"],['<e1>','</e1>','<e2>','</e2>','<e3>','</e3>','<e4>','</e4>']]
+
     sent = row['sentence']      #sentence
     se = literal_eval(row['subject_entity'])  #subject entity
     oe = literal_eval(row['object_entity'])   #object entity
 
     new_sent = ''
     if se['start_idx'] < oe['start_idx']: #문장에 subject -> object 순으로 등장
-        new_sent = sent[:se['start_idx']] + '<e1><e3>'+se['type']+'</e3>' + sent[se['start_idx']:se['end_idx'] + 1] + '</e1>'  \
-                    + sent[se['end_idx'] + 1:oe['start_idx']]+ '<e2><e4>'+oe['type']+'</e4>'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '</e2>' + sent[oe['end_idx'] + 1:]
+        new_sent = sent[:se['start_idx']] + etl[tem][0]+etl[tem][4]+se['type']+etl[tem][5] + sent[se['start_idx']:se['end_idx'] + 1] + etl[tem][1]  \
+                    + sent[se['end_idx'] + 1:oe['start_idx']]+ etl[tem][2]+etl[tem][6]+oe['type']+etl[tem][7]+ sent[oe['start_idx']:oe['end_idx'] + 1] + etl[tem][3] + sent[oe['end_idx'] + 1:]
     else:#문장에 object -> subject 순으로 등장
-        new_sent = sent[:oe['start_idx']]+ '<e2><e4>'+oe['type']+'</e4>'+ sent[oe['start_idx']:oe['end_idx'] + 1] + '</e2>' \
-                    + sent[oe['end_idx'] + 1:se['start_idx']] + '<e1><e3>'+se['type']+'</e3>' + sent[se['start_idx']:se['end_idx'] + 1] + '</e1>' + sent[se['end_idx'] + 1:]
+        new_sent = sent[:oe['start_idx']]+ etl[tem][2]+etl[tem][6]+oe['type']+etl[tem][7]+ sent[oe['start_idx']:oe['end_idx'] + 1] + etl[tem][3] \
+                    + sent[oe['end_idx'] + 1:se['start_idx']] + etl[tem][0]+etl[tem][4]+se['type']+etl[tem][5] + sent[se['start_idx']:se['end_idx'] + 1] + etl[tem][1] + sent[se['end_idx'] + 1:]
 
     return new_sent
     
 def tokenized_dataset(dataset, tokenizer,conf):
     data = []
     if conf.data.tem == 1:  # Typed entity marker만 사용
-        for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sent = add_entity_type_token_punct(item)
+        for _, item in tqdm(dataset.iterrows(), desc="add_entity_type_token & tokenizing", total=len(dataset)):
+            sent = add_entity_token(item,conf.data.tem)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             data.append(output)     #[{input_ids, attention_mask, token_type_ids}]
 
@@ -75,7 +61,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
         sentence_list = []    
         #typed_entity_marker 사용시 스페셜토큰 추가
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sentence_list.append(add_entity_token(item))
+            sentence_list.append(sent = add_entity_token(item,conf.data.tem))
 
         for sent in tqdm(sentence_list, desc="tokenizing", total=len(sentence_list)):
             # 문장을 tokenize 한 후 tokenized_sent 변수에 할당
