@@ -54,7 +54,7 @@ def inference(conf):
     # tokenizer.add_special_tokens()
     # tokenizer.add_tokens()
 
-    if conf.data.tem == 1 or conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
+    if conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
         special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
         tokenizer.add_special_tokens(special_tokens_dict)
 
@@ -66,8 +66,7 @@ def inference(conf):
     if conf.model.model_class_name == 'Model':
         model = model_arch.Model(conf, len(tokenizer))
     elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
-        model_config = AutoConfig.from_pretrained(model_name)
-        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+        model = model_arch.CustomRBERT(conf, len(tokenizer))
     elif conf.model.model_class_name == 'LSTMModel':    #LSTM
         model = model_arch.LSTMModel(conf, len(tokenizer))
     elif conf.model.model_class_name == 'AuxiliaryModel':    
