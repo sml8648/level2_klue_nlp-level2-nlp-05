@@ -75,7 +75,7 @@ def train(conf):
     # use_fast=False로 수정할 경우 -> RuntimeError 발생
     # RuntimeError: CUDA error: CUBLAS_STATUS_NOT_INITIALIZED when calling `cublasCreate(handle)`
 
-    if conf.data.tem == 1 or conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰 추가
+    if conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
         special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
         tokenizer.add_special_tokens(special_tokens_dict)
         
