@@ -64,8 +64,13 @@ def inference(conf):
     checkpoint = torch.load(load_model_path)
 
     # 모델 구조를 가져옵니다.
-    model_class = locate(f'model.model.{conf.model.model_class_name}')
-    model = model_class(conf, len(tokenizer))
+    if conf.model.model_class_name == 'TAPT' :
+        model = AutoModelForSequenceClassification.from_pretrained(
+        conf.path.load_pretrained_model_path, num_labels=30
+    )
+    else:
+        model_class = locate(f'model.model.{conf.model.model_class_name}')
+        model = model_class(conf, len(tokenizer))
     ### Refactoring 필요!!
 
 

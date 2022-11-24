@@ -101,6 +101,10 @@ def train(conf):
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
         checkpoint = torch.load(conf.path.load_model_path)
         model.load_state_dict(checkpoint)
+    elif conf.model.model_class_name == 'TAPT' :
+        model = AutoModelForSequenceClassification.from_pretrained(
+        conf.path.load_pretrained_model_path, num_labels=30
+        )
     else:
         model_class = locate(f'model.model.{conf.model.model_class_name}')
         model = model_class(conf, len(tokenizer))
@@ -118,7 +122,7 @@ def train(conf):
         optimizer,
         max_lr=conf.train.learning_rate,
         steps_per_epoch=steps_per_epoch,
-        pct_start=0.5,
+        pct_start=0.3,
         epochs=conf.train.max_epoch,
         anneal_strategy="linear",
         div_factor=1e100,
