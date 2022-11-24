@@ -5,13 +5,12 @@ from torch.optim.lr_scheduler import OneCycleLR
 # https://huggingface.co/course/chapter3/4
 import transformers
 from transformers import DataCollatorWithPadding, EarlyStoppingCallback
-from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
+from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig, AutoModel
 from transformers import AutoModelForSequenceClassification
 
 import data_loaders.data_loader as dataloader
 import utils.util as utils
 import model.model as model_arch
-from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 
 import mlflow
 import mlflow.sklearn
@@ -21,7 +20,9 @@ from datetime import datetime
 import re
 import os
 from omegaconf import OmegaConf
+from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 from collections import defaultdict
+from pydoc import locate
 
 
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
@@ -86,7 +87,7 @@ def train(conf):
 
     # mlflow 실험명으로 들어갈 이름을 설정합니다.
     experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
@@ -94,23 +95,19 @@ def train(conf):
     RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-    if conf.model.model_class_name == 'Model':
-        model = model_arch.Model(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
-        model = model_arch.CustomRBERT(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'LSTMModel':    #LSTM
-        model = model_arch.LSTMModel(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModel':    
-        model = model_arch.AuxiliaryModel(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModel2':    
-        model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModelWithEntity':    
-        model = model_arch.AuxiliaryModelWithEntity(conf, len(tokenizer))
+    continue_train=False
+    if continue_train:    
+        model_config = AutoConfig.from_pretrained(model_name)
+        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+        checkpoint = torch.load(conf.path.load_model_path)
+        model.load_state_dict(checkpoint)
     elif conf.model.model_class_name == 'TAPT' :
         model = AutoModelForSequenceClassification.from_pretrained(
         conf.path.load_pretrained_model_path, num_labels=30
         )
-    ### Refactoring 필요!!
+    else:
+        model_class = locate(f'model.model.{conf.model.model_class_name}')
+        model = model_class(conf, len(tokenizer))
 
     model.parameters
     model.to(device)
@@ -125,7 +122,7 @@ def train(conf):
         optimizer,
         max_lr=conf.train.learning_rate,
         steps_per_epoch=steps_per_epoch,
-        pct_start=0.5,
+        pct_start=0.3,
         epochs=conf.train.max_epoch,
         anneal_strategy="linear",
         div_factor=1e100,

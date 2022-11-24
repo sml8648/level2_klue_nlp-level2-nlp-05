@@ -235,7 +235,7 @@ class AuxiliaryModel(CustomModel):
         return self.weight[0]*binary_loss + self.weight[1]*loss
 
 
-class AuxiliaryModel2(CustomModel):
+class AuxiliaryModel2(AuxiliaryModel):
     '''
         binary label인지를 분류하는 binary_classification task를 추가한 AuxiliaryModel에서 binary classifier label을 0,1,2 3개로 분류하도록 변경한 것
         0은 no_relation, 1은 org, 2는 per
@@ -291,7 +291,7 @@ class AuxiliaryModel2(CustomModel):
             loss_fct = self.loss_fct
             dic = {0: 0, 1: 1, 2: 1, 3: 1, 5: 1, 7: 1, 9: 1, 18: 1, 19: 1, 20: 1, 22: 1, 28: 1, 4: 2, 6: 2, 8: 2, 10: 2, 11: 2, 12: 2, 13: 2, 14: 2, 15: 2, 16: 2, 17: 2, 21: 2, 23: 2, 24: 2, 25: 2, 26: 2, 27: 2, 29: 2}
             binary_labels = torch.tensor([dic[i.item()] for i in labels], device="cuda")
-            binary_loss = loss_fct(binary_logits.view(-1, 3), binary_labels.view(-1))
+            binary_loss = loss_fct(binary_logits, binary_labels.view(-1))
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             loss = self.weight[0]*binary_loss + self.weight[1]+loss
 
@@ -302,11 +302,11 @@ class AuxiliaryModel2(CustomModel):
 
     def rdrop(self, binary_logits, logits, labels, input_ids, attention_mask, token_type_ids, alpha=0.1):
         binary_logits2, logits2 = self.process(input_ids, attention_mask, token_type_ids)
-        binary_labels = torch.tensor([i if i==0 else 1 for i in labels], device="cuda")
+        dic = {0: 0, 1: 1, 2: 1, 3: 1, 5: 1, 7: 1, 9: 1, 18: 1, 19: 1, 20: 1, 22: 1, 28: 1, 4: 2, 6: 2, 8: 2, 10: 2, 11: 2, 12: 2, 13: 2, 14: 2, 15: 2, 16: 2, 17: 2, 21: 2, 23: 2, 24: 2, 25: 2, 26: 2, 27: 2, 29: 2}
+        binary_labels = torch.tensor([dic[i.item()] for i in labels], device="cuda")
         logits = logits.view(-1, self.num_labels)
         logits2 = logits.view(-1, self.num_labels)
         
-
         ce_loss = 0.5 * (self.loss_fct(logits, labels.view(-1)) + self.loss_fct(logits2, labels.view(-1)))
         kl_loss = loss_module.compute_kl_loss(logits, logits2)
         # carefully choose hyper-parameters
@@ -317,6 +317,7 @@ class AuxiliaryModel2(CustomModel):
         # carefully choose hyper-parameters
         binary_loss = binary_ce_loss + alpha * binary_kl_loss
         return self.weight[0]*binary_loss + self.weight[1]*loss
+
 
 
 ## https://github.com/monologg/R-BERT/blob/master/model.py 사용

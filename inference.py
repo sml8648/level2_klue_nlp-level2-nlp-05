@@ -15,6 +15,7 @@ from datetime import datetime
 from transformers import DataCollatorWithPadding
 from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 from collections import defaultdict
+from pydoc import locate
 
 
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
@@ -63,20 +64,13 @@ def inference(conf):
     checkpoint = torch.load(load_model_path)
 
     # 모델 구조를 가져옵니다.
-    if conf.model.model_class_name == 'Model':
-        model = model_arch.Model(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
-        model = model_arch.CustomRBERT(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'LSTMModel':    #LSTM
-        model = model_arch.LSTMModel(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModel':    
-        model = model_arch.AuxiliaryModel(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModel2':    
-        model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'TAPT' :
+    if conf.model.model_class_name == 'TAPT' :
         model = AutoModelForSequenceClassification.from_pretrained(
         conf.path.load_pretrained_model_path, num_labels=30
-        )
+    )
+    else:
+        model_class = locate(f'model.model.{conf.model.model_class_name}')
+        model = model_class(conf, len(tokenizer))
     ### Refactoring 필요!!
 
 
