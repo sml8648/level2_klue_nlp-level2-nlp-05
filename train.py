@@ -10,6 +10,7 @@ from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
 import data_loaders.data_loader as dataloader
 import utils.util as utils
 import model.model as model_arch
+from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 
 import mlflow
 import mlflow.sklearn
@@ -17,6 +18,32 @@ from azureml.core import Workspace
 
 from datetime import datetime
 import re
+import os
+from omegaconf import OmegaConf
+from collections import defaultdict
+
+
+class MyDataCollatorWithPadding(DataCollatorWithPadding):
+    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+        max_len = 0
+        for i in features:
+            if len(i['input_ids']) > max_len : max_len = len(i['input_ids'])
+
+        batch = defaultdict(list)
+        for item in features:
+            for k in item:
+                if('label' not in k):
+                    padding_len = max_len - item[k].size(0)
+                    if(k == 'input_ids'):
+                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id]*padding_len)), dim=0)
+                    else:
+                        item[k] = torch.cat((item[k], torch.tensor([0]*padding_len)), dim=0)
+                batch[k].append(item[k])
+                
+        for k in batch:
+            batch[k] = torch.stack(batch[k], dim=0)
+            batch[k] = batch[k].to(torch.long)
+        return batch
 
 
 def start_mlflow(experiment_name):
@@ -50,15 +77,15 @@ def train(conf):
         special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
         tokenizer.add_special_tokens(special_tokens_dict)
         
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
     # tokenizer.add_special_tokens()
     # tokenizer.add_tokens()
 
     # mlflow 실험명으로 들어갈 이름을 설정합니다.
-    experiment_name = model_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
+    start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
@@ -70,6 +97,15 @@ def train(conf):
         model = model_arch.Model(conf, len(tokenizer))
     elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
         model = model_arch.CustomRBERT(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'LSTMModel':    #LSTM
+        model = model_arch.LSTMModel(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModel':    
+        model = model_arch.AuxiliaryModel(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModel2':    
+        model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'AuxiliaryModelWithEntity':    
+        model = model_arch.AuxiliaryModelWithEntity(conf, len(tokenizer))
+    
 
     model.parameters
     model.to(device)
@@ -132,6 +168,7 @@ def train(conf):
     # train 과정에서 가장 평가 점수가 좋은 모델을 저장합니다.
     # best_model 폴더에 저장됩니다.
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
+    
     # mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     # trainer.push_to_hub()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     model.eval()
@@ -141,3 +178,9 @@ def train(conf):
     print("eval loss: ", metrics["eval_loss"])
     print("eval auprc: ", metrics["eval_auprc"])
     print("eval micro f1 score: ", metrics["eval_micro f1 score"])
+    
+    # best_model 저장할 때 사용했던 config파일도 같이 저장합니다.
+    if not os.path.exists(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}"):
+        os.makedirs(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
+    with open(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/config.yaml", "w+") as fp:
+        OmegaConf.save(config=conf, f=fp.name)
