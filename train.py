@@ -5,12 +5,11 @@ from torch.optim.lr_scheduler import OneCycleLR
 # https://huggingface.co/course/chapter3/4
 import transformers
 from transformers import DataCollatorWithPadding, EarlyStoppingCallback
-from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
+from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig, AutoModel
 
 import data_loaders.data_loader as dataloader
 import utils.util as utils
 import model.model as model_arch
-from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 
 import mlflow
 import mlflow.sklearn
@@ -20,7 +19,9 @@ from datetime import datetime
 import re
 import os
 from omegaconf import OmegaConf
+from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 from collections import defaultdict
+from pydoc import locate
 
 
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
@@ -87,26 +88,22 @@ def train(conf):
     experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
     start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
+    
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
     RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path,conf)
     RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-    if conf.model.model_class_name == 'Model':
-        model = model_arch.Model(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
+    continue_train=False
+    if continue_train:    
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
-    elif conf.model.model_class_name == 'LSTMModel':    #LSTM
-        model = model_arch.LSTMModel(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModel':    
-        model = model_arch.AuxiliaryModel(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModel2':    
-        model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
-    elif conf.model.model_class_name == 'AuxiliaryModelWithEntity':    
-        model = model_arch.AuxiliaryModelWithEntity(conf, len(tokenizer))
-    
+        checkpoint = torch.load('/opt/ml/level2_klue_nlp-level2-nlp-05/best_model/klue-roberta-large/22-19-49/pytorch_model.bin')
+        model.load_state_dict(checkpoint)
+    else:
+        model_class = locate(f'model.model.{conf.model.model_class_name}')
+        model = model_class(conf, len(tokenizer))
 
     model.parameters
     model.to(device)
