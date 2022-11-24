@@ -3,6 +3,7 @@ import random
 
 import inference
 import train
+import tapt_pretrain
 
 from omegaconf import OmegaConf
 
@@ -13,7 +14,7 @@ from omegaconf import OmegaConf
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # 여기서 omegaconfig 파일 이름 설정하고 실행해주세요.
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="tapt-klue-roberta")
     parser.add_argument("--mode", "-m", required=True)
 
     args = parser.parse_args()
@@ -39,7 +40,12 @@ if __name__ == "__main__":
             print("로드할 모델의 경로를 입력해주세요.")
         else:
             inference.inference(conf)
+
+    elif args.mode == "tapt" or args.mode == "tp" :
+        tapt_pretrain.tapt_pretrain(conf)
+        
     else:
         print("실행모드를 다시 입력해주세요.")
-        print("train     : t,\ttrain")
-        print("inference : i,\tinference")
+        print("train        : t,\ttrain")
+        print("inference    : i,\tinference")
+        print("tapt         : tp,\ttapt")

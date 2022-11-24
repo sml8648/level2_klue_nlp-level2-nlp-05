@@ -6,6 +6,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 import transformers
 from transformers import DataCollatorWithPadding, EarlyStoppingCallback
 from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig, AutoModel
+from transformers import AutoModelForSequenceClassification
 
 import data_loaders.data_loader as dataloader
 import utils.util as utils
@@ -88,7 +89,6 @@ def train(conf):
     experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
     start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
-    
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
     RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path,conf)
@@ -99,7 +99,7 @@ def train(conf):
     if continue_train:    
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
-        checkpoint = torch.load('/opt/ml/level2_klue_nlp-level2-nlp-05/best_model/klue-roberta-large/22-19-49/pytorch_model.bin')
+        checkpoint = torch.load(conf.path.load_model_path)
         model.load_state_dict(checkpoint)
     else:
         model_class = locate(f'model.model.{conf.model.model_class_name}')
