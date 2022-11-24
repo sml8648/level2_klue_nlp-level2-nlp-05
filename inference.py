@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 
 from transformers import AutoConfig
 import model.model as model_arch
@@ -74,6 +74,12 @@ def inference(conf):
         model = model_arch.AuxiliaryModel(conf, len(tokenizer))
     elif conf.model.model_class_name == 'AuxiliaryModel2':    
         model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'TAPT' :
+        model = AutoModelForSequenceClassification.from_pretrained(
+        conf.path.load_pretrained_model_path, num_labels=30
+        )
+    ### Refactoring 필요!!
+
 
     # 모델 구조 위에 checkpoint를 덮어씌웁니다.
     # 모델 구조와 checkpoint에 저장되어 있는 파라미터 구조가 다른 경우 에러가 발생합니다.
