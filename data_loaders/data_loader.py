@@ -32,7 +32,8 @@ def add_entity_token(row, tem):
     sent = row['sentence']      #sentence
     se = literal_eval(row['subject_entity'])  #subject entity
     oe = literal_eval(row['object_entity'])   #object entity
-
+    se['end_idx'] = se['start_idx'] + len(se['word'].split(',')[0]) -1
+    oe['end_idx'] = oe['start_idx'] + len(oe['word'].split(',')[0]) -1
     new_sent = ''
     if se['start_idx'] < oe['start_idx']: #문장에 subject -> object 순으로 등장
         new_sent = sent[:se['start_idx']] + etl[tem][0]+etl[tem][4]+se['type']+etl[tem][5] + sent[se['start_idx']:se['end_idx'] + 1] + etl[tem][1]  \
