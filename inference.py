@@ -66,7 +66,7 @@ def inference(conf):
     if conf.model.model_class_name == 'Model':
         model = model_arch.Model(conf, len(tokenizer))
     elif conf.model.model_class_name == 'CustomRBERT':    #RBERT
-        model = model_arch.CustomRBERT(conf``, len(tokenizer))
+        model = model_arch.CustomRBERT(conf, len(tokenizer))
     elif conf.model.model_class_name == 'LSTMModel':    #LSTM
         model = model_arch.LSTMModel(conf, len(tokenizer))
     elif conf.model.model_class_name == 'AuxiliaryModel':    

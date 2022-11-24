@@ -23,7 +23,8 @@ class RE_Dataset(torch.utils.data.Dataset):
 #typed-entity 스페셜 토큰 추가
 def add_entity_token(row, tem):   
     '''
-    〈Something〉는 <e2><e4>PER</e4>조지 해리슨</e2>이 쓰고 <e1><e3>ORG</e3>비틀즈</e1>가 1969년 앨범 《Abbey Road》에 담은 노래다.
+    tem == 1 :〈Something〉는 #%PER%조지 해리슨#이 쓰고 @*ORG*비틀즈@가 1969년 앨범 《Abbey Road》에 담은 노래다.
+    tem == 2 :〈Something〉는 <e2><e4>PER</e4>조지 해리슨</e2>이 쓰고 <e1><e3>ORG</e3>비틀즈</e1>가 1969년 앨범 《Abbey Road》에 담은 노래다.
     '''
     #entity token list. tem == 1 : 특수기호 토큰, tem == 2 : 스페셜 토큰
     etl=[[],["@", "@", "#", "#", "*", "*", "%", "%"],['<e1>','</e1>','<e2>','</e2>','<e3>','</e3>','<e4>','</e4>']]
@@ -61,7 +62,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
         sentence_list = []    
         #typed_entity_marker 사용시 스페셜토큰 추가
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sentence_list.append(sent = add_entity_token(item,conf.data.tem))
+            sentence_list.append(add_entity_token(item,conf.data.tem))
 
         for sent in tqdm(sentence_list, desc="tokenizing", total=len(sentence_list)):
             # 문장을 tokenize 한 후 tokenized_sent 변수에 할당
