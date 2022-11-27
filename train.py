@@ -10,6 +10,7 @@ from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
 import data_loaders.data_loader as dataloader
 import utils.util as utils
 import model.model as model_arch
+import model.modeling_roberta as roberta_arch
 from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 
 import mlflow
@@ -106,6 +107,8 @@ def train(conf):
         model = model_arch.AuxiliaryModel2(conf, len(tokenizer))
     elif conf.model.model_class_name == 'AuxiliaryModelWithEntity':    
         model = model_arch.AuxiliaryModelWithEntity(conf, len(tokenizer))
+    elif conf.model.model_class_name == 'RobertaForSequenceClassificationWithEntity' :
+        model = roberta_arch.RobertaForSequenceClassificationWithEntity(conf, len(tokenizer))
     
 
     model.parameters
