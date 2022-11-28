@@ -73,7 +73,9 @@ def inference(conf):
     if conf.model.model_class_name == "TAPT":
         model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
     else:
-        model_class = locate(f"model.model.{conf.model.model_class_name}")
+        model_class = locate(f'model.model.{conf.model.model_class_name}')
+        if model_class == None :
+             model_class = locate(f'model.modeling_roberta.{conf.model.model_class_name}') # for modeling_roberta
         model = model_class(conf, len(tokenizer))
     ### Refactoring 필요!!
 
