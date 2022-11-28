@@ -17,6 +17,7 @@ import transformers
 from torch.optim.lr_scheduler import OneCycleLR
 
 import model.model as model_arch
+import model.modeling_roberta as roberta_arch
 from transformers import DataCollatorWithPadding
 
 # https://huggingface.co/course/chapter3/4
@@ -116,6 +117,8 @@ def train(args, conf):
         )
     else:
         model_class = locate(f'model.model.{conf.model.model_class_name}')
+        if model_class == None :
+             model_class = locate(f'model.modeling_roberta.{conf.model.model_class_name}') # for modeling_roberta
         model = model_class(conf, len(tokenizer))
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -131,6 +134,8 @@ def train(args, conf):
 
     def model_init(trial):
         model_class = locate(f'model.model.{conf.model.model_class_name}')
+        if model_class == None :
+            model_class = locate(f'model.modeling_roberta.{conf.model.model_class_name}') # for modeling_roberta
         model = model_class(conf, len(tokenizer))
         return model
 
@@ -273,7 +278,7 @@ def train(args, conf):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="roberta_entity_config")
     parser.add_argument("--shuffle", default=True)
     # parser.add_argument('--optimizer', default='AdamW')
 
