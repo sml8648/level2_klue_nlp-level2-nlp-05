@@ -76,7 +76,7 @@ def add_entity_token(row, tem):
     return new_sent
 
 
-def add_entity_token_without_type(row):
+def add_entity_token_without_type(row, tem):
     """
     before
     〈Something〉는 조지 해리슨이 쓰고 비틀즈가 1969년 앨범 《Abbey Road》에 담은 노래다.,
@@ -135,120 +135,18 @@ def add_entity_token_without_type(row):
     return new_sent
 
 
-### notion에서 그대로 가져온 코드라서 Refactoring 필요!! ###
-def add_entity_token_korean(row):
-    entitiy_type_korean = {"ORG": "단체", "PER": "사람", "DAT": "날짜", "LOC": "위치", "POH": "기타", "NOH": "수량"}
-    sent = row["sentence"]  # sentence
-    se = literal_eval(row["subject_entity"])  # subject entity
-    oe = literal_eval(row["object_entity"])  # object entity
-
-    # 새로운 new_sent 변수에 special_token 추가해서 저장
-    # 이때, typed_entity_marker 를 적용할 수 있도록 <e1>, </e1>, <e2>, </e2>, <e3>, </e3>, <e4>, </e4> token 추가하고
-    # subject_entity 와 object_entity 의 type 을 new_sent 에 추가해줌
-    new_sent = ""
-    if se["start_idx"] < oe["start_idx"]:  # 문장에 subject -> object 순으로 등장
-        new_sent = (
-            sent[: se["start_idx"]]
-            + "@*"
-            + se["type"]
-            + "*"
-            + sent[se["start_idx"] : se["end_idx"] + 1]
-            + "@"
-            + sent[se["end_idx"] + 1 : oe["start_idx"]]
-            + "#%"
-            + oe["type"]
-            + "%"
-            + sent[oe["start_idx"] : oe["end_idx"] + 1]
-            + "#"
-            + sent[oe["end_idx"] + 1 :]
-        )
-    else:  # 문장에 object -> subject 순으로 등장
-        new_sent = (
-            sent[: oe["start_idx"]]
-            + "#%"
-            + oe["type"]
-            + "%"
-            + sent[oe["start_idx"] : oe["end_idx"] + 1]
-            + "#"
-            + sent[oe["end_idx"] + 1 : se["start_idx"]]
-            + "@*"
-            + se["type"]
-            + "*"
-            + sent[se["start_idx"] : se["end_idx"] + 1]
-            + "@"
-            + sent[se["end_idx"] + 1 :]
-        )
-
-    return new_sent
-
-
-def replace_entity_token(sent):
-    s_t_list = ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]
-    rp_t_list = ["@", "@", "#", "#", "‥", "‥", "♀", "♀"]
-    for s_t, rp_t in zip(s_t_list, rp_t_list):
-        sent = re.sub(s_t, rp_t, sent)
-    return sent
-
-
 def tokenized_dataset(dataset, tokenizer, conf):
     data = []
-    if conf.data.tem == 3:  # entity marker만 사용
-        for _, item in tqdm(dataset.iterrows(), desc="add_entity_token & tokenizing", total=len(dataset)):
-            sent = add_entity_token_korean(item)
-            sent = replace_entity_token(sent)
-            output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
-            sub_token = "@"
-            obj_token = "#"
-            sub_id = tokenizer.convert_tokens_to_ids(sub_token)
-            obj_id = tokenizer.convert_tokens_to_ids(obj_token)
-            found = {sub_id: 0, obj_id: 0}
-            entity_token = []
-            for input_id in output["input_ids"]:
-                if input_id in found:
-                    found[input_id] += 1
-                    entity_token.append(0)
-                elif found[sub_id] == 1 or found[obj_id] == 1:
-                    entity_token.append(1)
-                else:
-                    entity_token.append(0)
 
-            output["entity_token"] = entity_token
-            data.append(output)
-
-    elif conf.data.tem == 1:  # Typed entity marker만 사용
+    # tem == 1 : Typed marker, entity marker 사용
+    if conf.data.tem == 1:
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sent = add_entity_token(item)
-            sent = replace_entity_token(sent)
+            sent = add_entity_token(item, conf.data.tem)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             data.append(output)  # [{input_ids, attention_mask, token_type_ids}]
 
-    elif conf.data.tem == 4:  # pair구하기
-        for _, item in tqdm(dataset.iterrows(), desc="add_entity_type_token & tokenizing", total=len(dataset)):
-            sent = add_entity_token(item, 1)
-            se = literal_eval(item["subject_entity"])["type"]
-            oe = literal_eval(item["object_entity"])["type"]
-            if (se, oe) == ("LOC", "DAT"):
-                output.attention_mask[0] = 2
-            else:
-                pairs = [
-                    ("ORG", "PER"),
-                    ("ORG", "ORG"),
-                    ("ORG", "DAT"),
-                    ("ORG", "LOC"),
-                    ("ORG", "POH"),
-                    ("ORG", "NOH"),
-                    ("PER", "PER"),
-                    ("PER", "ORG"),
-                    ("PER", "DAT"),
-                    ("PER", "LOC"),
-                    ("PER", "POH"),
-                    ("PER", "NOH"),
-                ]
-                output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
-                output.attention_mask[0] = pairs.index((se, oe))
-            data.append(output)  # [{input_ids, attention_mask, token_type_ids}]
-
-    elif conf.data.tem == 2:  # typed entity marker + emask
+    # tem == 2 : Typed marker, entity marker + emask 사용
+    elif conf.data.tem == 2:
         """
         1. 스페셜 토큰을 사용하여 typed entity marker 표시
         2. 스페셜 토큰의 위치를 저장
@@ -256,12 +154,10 @@ def tokenized_dataset(dataset, tokenizer, conf):
         4. 토크나이징
         5. 토큰화한 길이랑 같은 길이면서, (2번에서 기록한)스페셜 토큰의 위치는 1, 나머지는 0인 emask 생성
         """
-        sentence_list = []
-        # typed_entity_marker 사용시 스페셜토큰 추가
-        for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sentence_list.append(add_entity_token(item, conf.data.tem))
 
-        for sent in tqdm(sentence_list, desc="tokenizing", total=len(sentence_list)):
+        # typed_entity_marker 사용시 스페셜토큰 추가
+        for _, item in tqdm(dataset.iterrows(), desc="tokenizing", total=len(dataset)):
+            sent = add_entity_token(item, conf.data.tem)
             # 문장을 tokenize 한 후 tokenized_sent 변수에 할당
             tokenized_sent = tokenizer.tokenize(sent)
             # 스페셜토큰 위치 리스트, 스페셜토큰 리스트, 대체토큰 리스트
@@ -291,6 +187,7 @@ def tokenized_dataset(dataset, tokenizer, conf):
                 add_special_tokens=True,
                 return_token_type_ids=False if "roberta" in conf.model.model_name else True,  # roberta는 사용안함, inference시 꼭 False로!
             )
+
             # 차원 낮추기
             tokenized_sentences["input_ids"] = tokenized_sentences["input_ids"].squeeze()
             tokenized_sentences["attention_mask"] = tokenized_sentences["attention_mask"].squeeze()
@@ -319,6 +216,55 @@ def tokenized_dataset(dataset, tokenizer, conf):
             tokenized_sentences["e4_mask"] = torch.tensor(e4_mask, dtype=torch.long)
 
             data.append(tokenized_sentences)  # [{input_ids, attention_mask, token_type_ids, e1mask, e2mask, e3mask, e4mask}]
+
+    # entity marker만 사용
+    elif conf.data.tem == 3:
+        for _, item in tqdm(dataset.iterrows(), desc="add_entity_token & tokenizing", total=len(dataset)):
+            sent = add_entity_token(item, tem=1)
+            output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
+            sub_token = "@"
+            obj_token = "#"
+            sub_id = tokenizer.convert_tokens_to_ids(sub_token)
+            obj_id = tokenizer.convert_tokens_to_ids(obj_token)
+            found = {sub_id: 0, obj_id: 0}
+            entity_token = []
+            for input_id in output["input_ids"]:
+                if input_id in found:
+                    found[input_id] += 1
+                    entity_token.append(0)
+                elif found[sub_id] == 1 or found[obj_id] == 1:
+                    entity_token.append(1)
+                else:
+                    entity_token.append(0)
+
+            output["entity_token"] = entity_token
+            data.append(output)
+
+    elif conf.data.tem == 4:  # pair구하기
+        for _, item in tqdm(dataset.iterrows(), desc="add_entity_type_token & tokenizing", total=len(dataset)):
+            sent = add_entity_token(item, 1)
+            se = literal_eval(item["subject_entity"])["type"]
+            oe = literal_eval(item["object_entity"])["type"]
+            if (se, oe) == ("LOC", "DAT"):
+                output.attention_mask[0] = 2
+            else:
+                pairs = [
+                    ("ORG", "PER"),
+                    ("ORG", "ORG"),
+                    ("ORG", "DAT"),
+                    ("ORG", "LOC"),
+                    ("ORG", "POH"),
+                    ("ORG", "NOH"),
+                    ("PER", "PER"),
+                    ("PER", "ORG"),
+                    ("PER", "DAT"),
+                    ("PER", "LOC"),
+                    ("PER", "POH"),
+                    ("PER", "NOH"),
+                ]
+                output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
+                output.attention_mask[0] = pairs.index((se, oe))
+            data.append(output)  # [{input_ids, attention_mask, token_type_ids}]
     else:
         for _, item in tqdm(dataset.iterrows(), desc="tokenizing", total=len(dataset)):
 
