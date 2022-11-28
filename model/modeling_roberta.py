@@ -249,12 +249,10 @@ class RobertaForSequenceClassificationWithEntity(nn.Module):
         self.model_name = conf.model.model_name
 
         self.config = transformers.AutoConfig.from_pretrained(self.model_name)
-        self.model = transformers.AutoModel.from_pretrained(self.model_name) 
-        self.roberta = RobertaModelWithEntity(self.config)
+        self.roberta = RobertaModelWithEntity.from_pretrained(self.model_name) 
         self.classifier = RobertaClassificationHeadLSTM(self.config, self.conf) # 기존 classifier를 LSTM으로 수정
-        self.model.resize_token_embeddings(new_vocab_size)
-        self.loss_fct = loss_module.loss_config[self.conf.train.loss] # Refactoring 예정 conf.를 받아와야함
-        # self.loss_fct = loss_module.loss_config['focal'] # focal로 강제 명시
+        self.roberta.resize_token_embeddings(new_vocab_size)
+        self.loss_fct = loss_module.loss_config[self.conf.train.loss]
 
         # Initialize weights and apply final processing
         # self.post_init()
@@ -310,11 +308,35 @@ class RobertaForSequenceClassificationWithEntity(nn.Module):
         )
 
 
-class RobertaClassificationHeadLSTM(RobertaClassificationHead):
+class RobertaClassificationHead(nn.Module):
+    """Head for sentence-level classification tasks."""
+
+    def __init__(self, config, conf):
+        super().__init__()
+        self.num_labels = 30
+        self.conf = conf
+        self.hidden_dim = config.hidden_size
+
+        self.dense = nn.Linear(self.hidden_dim , self.hidden_dim )
+        self.dropout = nn.Dropout(self.conf.train.dropout)
+        self.out_proj = nn.Linear(self.hidden_dim , self.num_labels)
+
+    def forward(self, features, **kwargs):
+        x = features[:, 0, :]  # take <s> token (equiv. to [CLS])
+        x = self.dropout(x)
+        x = self.dense(x)
+        x = torch.tanh(x)
+        x = self.dropout(x)
+        x = self.out_proj(x)
+        return x
+
+
+
+class RobertaClassificationHeadLSTM(nn.Module):
     """Head for sentence-level classification tasks with LSTM"""
 
     def __init__(self, config, conf):
-        super().__init__(config)
+        super().__init__()
         self.num_labels = 30
         self.conf = conf
         self.hidden_dim = config.hidden_size
@@ -323,7 +345,7 @@ class RobertaClassificationHeadLSTM(RobertaClassificationHead):
                              batch_first=True, bidirectional=True)
         self.dense = nn.Linear(self.hidden_dim, self.hidden_dim * 4)
         self.activation = torch.tanh
-        self.dropout = nn.Dropout(conf.train.dropout)
+        self.dropout = nn.Dropout(self.conf.train.dropout)
         self.out_proj = nn.Linear(self.hidden_dim * 4, self.num_labels)
 
     def forward(self, features, **kwargs):
