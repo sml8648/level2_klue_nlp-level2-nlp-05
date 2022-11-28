@@ -9,9 +9,6 @@ from transformers import (
 import torch
 from transformers import Trainer, TrainingArguments
 
-import argparse
-from omegaconf import OmegaConf
-
 def tapt_pretrain(conf):
     model_name = conf.model.model_name
 
@@ -62,15 +59,3 @@ def tapt_pretrain(conf):
 
     trainer.train()
     model.save_pretrained("./klue-roberta-pretrained")  # pretrained_model save
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    # 여기서 omegaconfig 파일 이름 설정하고 실행해주세요.
-    parser.add_argument("--config", "-c", type=str, default="tapt-klue-roberta")
-    parser.add_argument("--mode", "-m", required=True)
-
-    args = parser.parse_args()
-    conf = OmegaConf.load(f"./config/{args.config}.yaml")
-    print("실행 중인 config file: ", args.config)
-
-    tapt_pretrain(conf)
