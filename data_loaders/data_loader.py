@@ -104,7 +104,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
     data = []
     if conf.data.tem == 3:  # entity marker만 사용
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token & tokenizing", total=len(dataset)):
-            sent = add_entity_token_freq(item)
+            sent = add_entity_token_korean(item)
             sent = replace_entity_token(sent)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             sub_token = '@'
