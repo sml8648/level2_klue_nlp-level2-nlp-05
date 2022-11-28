@@ -1,0 +1,41 @@
+path:
+  train_path: ./dataset/train/train.csv
+  dev_path: ./dataset/dev/dev.csv
+  test_path: ./dataset/test/test.csv
+  predict_path: ./dataset/predict/predict.csv
+  # inference를 하는 경우 로드할 모델의 경로를 입력해주세요.
+  load_model_path: /opt/ml/github/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-small/18-17-38/checkpoint-500/pytorch_model.bin
+
+model:
+  model_class_name: AuxiliaryModelWithEntity #model.py에서 사용할 모델 이름
+  # Model : Model
+  # CustomRBERT : RBERT(tem=2로 설정할 것)
+  model_name: klue/roberta-large
+
+data:
+  tem: 3
+  # defalut(0)  concat 
+  # 1           Typed entity marker
+  # 2           Typed entity marker + emask (RBERT에서 사용)
+  # 3           Entity marker without type
+
+train:
+  max_epoch: 8
+  batch_size: 16
+  learning_rate: 3e-5
+  loss: focal # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
+  # nll : nll_loss
+  # crossentropy : crossentropy_loss
+  # focal: FocalLoss()
+  save_steps: 1000
+  # save_steps은 반드시 eval_steps의 배수여야 합니다!!!! """n * save_steps = eval_steps"""
+  eval_steps: 1000
+  logging_steps: 500
+  dropout: 0.2
+  rdrop: True # rdrop 사용시 batch_size / 2
+  
+utils:
+  seed: 42
+  monitor: micro f1 score
+  patience: 20
+  top_k: 1
