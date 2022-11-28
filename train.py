@@ -24,6 +24,9 @@ from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 from collections import defaultdict
 from pydoc import locate
 
+import pandas as pd
+import torch
+import torch.nn.functional as F
 
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
@@ -93,6 +96,7 @@ def train(conf):
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
     RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path,conf)
     RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
+    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path,conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
     continue_train=False
@@ -122,7 +126,7 @@ def train(conf):
         optimizer,
         max_lr=conf.train.learning_rate,
         steps_per_epoch=steps_per_epoch,
-        pct_start=0.3,
+        pct_start=0.5,
         epochs=conf.train.max_epoch,
         anneal_strategy="linear",
         div_factor=1e100,
@@ -171,7 +175,7 @@ def train(conf):
     # best_model 폴더에 저장됩니다.
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
     
-    # mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     # trainer.push_to_hub()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     model.eval()
     metrics = trainer.evaluate(RE_test_dataset)
@@ -180,9 +184,49 @@ def train(conf):
     print("eval loss: ", metrics["eval_loss"])
     print("eval auprc: ", metrics["eval_auprc"])
     print("eval micro f1 score: ", metrics["eval_micro f1 score"])
-    
+
     # best_model 저장할 때 사용했던 config파일도 같이 저장합니다.
     if not os.path.exists(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}"):
         os.makedirs(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
     with open(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/config.yaml", "w+") as fp:
         OmegaConf.save(config=conf, f=fp.name)
+
+    test_args = TrainingArguments(output_dir="./prediction", do_train=False, do_predict=True, per_device_eval_batch_size=16, dataloader_drop_last=False)
+    # init trainer
+    trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics, data_collator=data_collator)
+
+    # Test 점수 확인
+    predict_dev = True  # dev set에 대한 prediction 결과값 구하기 (output분석)
+    predict_submit = True # dev set은 evaluation만 하고 submit할 결과값 구하기
+    if(predict_dev):
+        outputs = trainer.predict(RE_test_dataset)
+        logits = torch.FloatTensor(outputs.predictions)
+        prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
+        result = torch.argmax(logits, axis=-1).detach().cpu().numpy()
+
+        pred_answer = result.tolist()
+        pred_answer = utils.num_to_label(pred_answer)
+        output_prob = prob.tolist()
+
+        output = pd.read_csv("./dataset/test/test.csv")
+        output["pred_label"] = pred_answer
+        output["probs"] = output_prob
+
+        output.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/dev_submission_{train_start_time}.csv", index=False)
+        output.to_csv(f"./prediction/dev_submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
+    if(predict_submit):
+        outputs1 = trainer.predict(RE_predict_dataset)
+        logits1 = torch.FloatTensor(outputs1.predictions)
+        prob1 = F.softmax(logits1, dim=-1).detach().cpu().numpy()
+        result1 = torch.argmax(logits1, axis=-1).detach().cpu().numpy()
+
+        pred_answer1 = result1.tolist()
+        pred_answer1 = utils.num_to_label(pred_answer1)
+        output_prob1 = prob1.tolist()
+
+        output1 = pd.read_csv("./prediction/sample_submission.csv")
+        output1["pred_label"] = pred_answer1
+        output1["probs"] = output_prob1
+
+        output1.to_csv(f"./prediction/submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
+        output1.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/submission_{train_start_time}.csv", index=False)

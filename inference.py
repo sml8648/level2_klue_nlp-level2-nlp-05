@@ -94,7 +94,7 @@ def inference(conf):
     trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics, data_collator=data_collator)
 
     # Test 점수 확인
-    predict_dev = False  # dev set에 대한 prediction 결과값 구하기 (output분석)
+    predict_dev = True  # dev set에 대한 prediction 결과값 구하기 (output분석)
     predict_submit = True # dev set은 evaluation만 하고 submit할 결과값 구하기
     if(predict_dev):
         outputs = trainer.predict(RE_test_dataset)
