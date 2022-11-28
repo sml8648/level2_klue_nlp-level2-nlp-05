@@ -126,7 +126,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
 
     elif conf.data.tem == 1:  # Typed entity marker만 사용
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sent = add_entity_token_freq(item)
+            sent = add_entity_token(item)
             sent = replace_entity_token(sent)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             data.append(output)
