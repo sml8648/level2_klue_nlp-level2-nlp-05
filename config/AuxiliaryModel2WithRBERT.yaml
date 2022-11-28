@@ -18,9 +18,9 @@ data:
   # 2           Typed entity marker + emask (RBERT에서 사용)
 
 train:
-  max_epoch: 10
+  max_epoch: 8
   batch_size: 16
-  learning_rate: 3e-5
+  learning_rate: 1.5e-5
   loss: focal # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
   # nll : nll_loss
   # crossentropy : crossentropy_loss
