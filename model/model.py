@@ -450,7 +450,7 @@ class AuxiliaryModelWithRBERT(AuxiliaryModel):
         return self.weight[0]*binary_loss + self.weight[1]*loss
 
 
-class AuxiliaryModel2WithRBERT(AuxiliaryModel):
+class AuxiliaryModel2WithRBERT(AuxiliaryModelWithRBERT):
     '''
         RBert에서 사용하는 entity token의 average값을 cls와 concat해서 binary_classification, label_classification에 사용한다.
     '''
@@ -472,10 +472,10 @@ class AuxiliaryModel2WithRBERT(AuxiliaryModel):
         #entity type 토큰 FC layer
         #self.entity_type_fc_layer = FCLayer(self.hidden_dim, self.hidden_dim, 0.1)
         
-        self.binary_classifier = FCLayer(self.hidden_dim, 3, 0.1)
-        self.label_classifier_0 = FCLayer(self.hidden_dim, self.num_labels, 0.1)
-        self.label_classifier_1 = FCLayer(self.hidden_dim, self.num_labels, 0.1)
-        self.label_classifier_2 = FCLayer(self.hidden_dim, self.num_labels, 0.1)
+        self.binary_classifier = FCLayer(self.hidden_dim * 5, 3, 0.1)
+        self.label_classifier_0 = FCLayer(self.hidden_dim * 5, self.num_labels, 0.1)
+        self.label_classifier_1 = FCLayer(self.hidden_dim * 5, self.num_labels, 0.1)
+        self.label_classifier_2 = FCLayer(self.hidden_dim * 5, self.num_labels, 0.1)
         self.weight = [0.5, 0.5]
         #self.weight2 = [0.8, 0.2]
         
@@ -491,7 +491,7 @@ class AuxiliaryModel2WithRBERT(AuxiliaryModel):
         for i,l in enumerate(binary_labels.tolist()):
             if(l == 0):
                 logits.append(self.label_classifier_0(x[i,:]))
-            elif(l == 0):
+            elif(l == 1):
                 logits.append(self.label_classifier_1(x[i,:]))
             else:
                 logits.append(self.label_classifier_2(x[i,:]))
