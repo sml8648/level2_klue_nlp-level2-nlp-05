@@ -257,12 +257,21 @@ class RobertaForSequenceClassificationWithEntity(nn.Module):
         # Initialize weights and apply final processing
         # self.post_init()
 
+    @autocast() 
+    def process(self, input_ids=None, attention_mask=None, entity_ids=None):
+        # Extract outputs from the body
+        outputs = self.roberta(input_ids=input_ids, attention_mask=attention_mask, entity_ids=entity_ids)
+        sequence_output = outputs[0]
+        logits = self.classifier(sequence_output)
+        return logits
+
     def forward(
         self,
         input_ids = None,
         attention_mask = None,
         token_type_ids = None,
         position_ids = None,
+        entity_ids=None,
         head_mask = None,
         inputs_embeds = None,
         labels = None,
@@ -278,34 +287,29 @@ class RobertaForSequenceClassificationWithEntity(nn.Module):
         """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        outputs = self.roberta(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-        sequence_output = outputs[0]
-        logits = self.classifier(sequence_output)
+        logits = self.process(input_ids=input_ids, attention_mask=attention_mask, entity_ids=entity_ids)
+
         loss = None
         if labels is not None:
             loss_fct = self.loss_fct
             loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            if(self.conf.train.rdrop):
+                loss = self.rdrop(logits, labels, input_ids, attention_mask, entity_ids)
+            return loss, logits
+        return logits
 
-        if not return_dict:
-            output = (logits,) + outputs[2:]
-            return ((loss,) + output) if loss is not None else output
 
-        return SequenceClassifierOutput(
-            loss=loss,
-            logits=logits,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
+    def rdrop(self, logits, labels, input_ids, attention_mask, entity_ids, alpha=0.1):
+        logits2 = self.process(input_ids, attention_mask, entity_ids)
+        # cross entropy loss for classifier
+        logits = logits.view(-1, self.num_labels)
+        logits2 = logits.view(-1, self.num_labels)
+        
+        ce_loss = 0.5 * (self.loss_fct(logits, labels.view(-1)) + self.loss_fct(logits2, labels.view(-1)))
+        kl_loss = loss_module.compute_kl_loss(logits, logits2)
+        # carefully choose hyper-parameters
+        loss = ce_loss + alpha * kl_loss
+        return loss
 
 
 class RobertaClassificationHead(nn.Module):
