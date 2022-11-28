@@ -1,32 +1,40 @@
+import pickle as pickle
+import os
+import pandas as pd
 import torch
-from torch.optim.lr_scheduler import OneCycleLR
+import sklearn
+import numpy as np
+from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
+from transformers import RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
+from ray.tune.suggest.hyperopt import HyperOptSearch
+from ray.tune.schedulers import ASHAScheduler
 
 # https://huggingface.co/transformers/v3.0.2/_modules/transformers/trainer.html
-# https://huggingface.co/course/chapter3/4
-import transformers
-from transformers import DataCollatorWithPadding, EarlyStoppingCallback
-from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig, AutoModel
-from transformers import AutoModelForSequenceClassification
-
 import data_loaders.data_loader as dataloader
+import trainer.trainer as CustomTrainer
 import utils.util as utils
+import transformers
+from torch.optim.lr_scheduler import OneCycleLR
+
 import model.model as model_arch
+from transformers import DataCollatorWithPadding
+
+# https://huggingface.co/course/chapter3/4
 
 import mlflow
 import mlflow.sklearn
-from azureml.core import Workspace
 
+from ray import tune
+from azureml.core import Workspace
+import argparse
+
+from omegaconf import OmegaConf
 from datetime import datetime
 import re
-import os
-from omegaconf import OmegaConf
+import torch.nn.functional as F
 from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 from collections import defaultdict
 from pydoc import locate
-
-import pandas as pd
-import torch
-import torch.nn.functional as F
 
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
@@ -51,6 +59,7 @@ class MyDataCollatorWithPadding(DataCollatorWithPadding):
         return batch
 
 
+
 def start_mlflow(experiment_name):
     # Enter details of your AzureML workspace
     subscription_id = "0275dc6c-996d-42d1-8263-8f7b4e81f271"
@@ -66,31 +75,27 @@ def start_mlflow(experiment_name):
     mlflow_run = mlflow.start_run()
 
 
-def train(conf):
-    # 실행 시간을 기록합니다.
+def train(args, conf):
     now = datetime.now()
     train_start_time = now.strftime("%d-%H-%M")
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    # huggingface-cli login  #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
 
     model_name = conf.model.model_name
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
-    # use_fast=False로 수정할 경우 -> RuntimeError 발생
-    # RuntimeError: CUDA error: CUBLAS_STATUS_NOT_INITIALIZED when calling `cublasCreate(handle)`
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
+    new_token_count = 0
     if conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
         special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
         tokenizer.add_special_tokens(special_tokens_dict)
-        
-    data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
+    # new_token_count += tokenizer.add_special_tokens()
+    # new_token_count += tokenizer.add_tokens()
+    new_vocab_size = tokenizer.vocab_size + new_token_count
+    print(new_vocab_size, len(tokenizer))
 
-    # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
-    # tokenizer.add_special_tokens()
-    # tokenizer.add_tokens()
-
-    # mlflow 실험명으로 들어갈 이름을 설정합니다.
-    experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    experiment_name = model_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
+    start_mlflow(experiment_name)
 
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
@@ -113,66 +118,92 @@ def train(conf):
         model_class = locate(f'model.model.{conf.model.model_class_name}')
         model = model_class(conf, len(tokenizer))
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     model.parameters
     model.to(device)
-    # 다른 옵티마이저를 사용하고 싶으신 경우 이 부분을 바꿔주세요.
-    optimizer = transformers.AdamW(model.parameters(), lr=conf.train.learning_rate)
+    
+    def ray_hp_space(trial):
+        return {
+            "learning_rate": tune.loguniform(8e-6, 6e-5),
+            "per_device_train_batch_size": tune.choice([16]),
+        }
 
-    # 이등변 삼각형 형태로 lr이 서서히 증가했다가 감소하는 스케줄러입니다.
-    # 첫시작 lr: learning_rate/div_factor, 마지막 lr: 첫시작 lr/final_div_factor
-    # 학습과정 step수를 계산해 스케줄러에 입력해줍니다. -> steps_per_epoch * epochs / 2 지점 기준으로 lr가 상승했다가 감소
-    steps_per_epoch = len(RE_train_dataset) // conf.train.batch_size + 1 if len(RE_train_dataset) % conf.train.batch_size != 0 else len(RE_train_dataset) // conf.train.batch_size
-    scheduler = OneCycleLR(
-        optimizer,
-        max_lr=conf.train.learning_rate,
-        steps_per_epoch=steps_per_epoch,
-        pct_start=0.5,
-        epochs=conf.train.max_epoch,
-        anneal_strategy="linear",
-        div_factor=1e100,
-        final_div_factor=1,
-    )
+    def model_init(trial):
+        model_class = locate(f'model.model.{conf.model.model_class_name}')
+        model = model_class(conf, len(tokenizer))
+        return model
 
+    # 사용한 option 외에도 다양한 option들이 있습니다.
+    # https://huggingface.co/transformers/main_classes/trainer.html#trainingarguments 참고해주세요.
     training_args = TrainingArguments(
-        # output directory 경로 step_saved_model/실행모델/실행시각(일-시-분)
-        # -> ex. step_saved_model/klue-roberta-latge/18-12-04(표준시각이라 9시간 느림)
-        # 모델이 같더라도 실행한 시간에 따라 저장되는 경로가 달라집니다. 서버 용량 관리를 잘해주세요.
-        # step_saved_model 폴더에 저장됩니다.
-        output_dir=f"./step_saved_model/{re.sub('/', '-', model_name)}/{train_start_time}",
-        save_total_limit=conf.utils.top_k,  # save_steps에서 저장할 모델의 최대 개수
-        save_steps=conf.train.save_steps,  # 이 step마다 eval_steps에서 계산한 값을 기준으로 모델을 저장합니다.
-        num_train_epochs=conf.train.max_epoch,  # 학습 에포크 수
+        #hub_model_id="jstep750/basburger",
+        output_dir=f"./step_saved_model/{re.sub('/', '-', model_name)}/{train_start_time}",  # output directory
+        save_total_limit=1,  # number of total save model.
+        save_steps=914,  # model saving step.
+        num_train_epochs=conf.train.max_epoch,  # total number of training epochs
         learning_rate=conf.train.learning_rate,  # learning_rate
-        per_device_train_batch_size=conf.train.batch_size,  # train batch size
-        per_device_eval_batch_size=conf.train.batch_size,  # valid batch size
-        # weight_decay=0.01,               # strength of weight decay 이거 머하는 건지 모르겠어요.
-        logging_dir="./logs",  # directory for storing logs 로그 경로 설정인데 폴더가 안생김?
-        logging_steps=conf.train.logging_steps,  # 해당 스탭마다 loss, lr, epoch가 cmd에 출력됩니다.
-        evaluation_strategy="steps",
+        per_device_train_batch_size=conf.train.batch_size,  # batch size per device during training
+        per_device_eval_batch_size=conf.train.batch_size,  # batch size for evaluation
+        # weight_decay=0.01,               # strength of weight decay
+        logging_dir="./logs",  # directory for storing logs
+        logging_steps=500,  # log saving step.
+        evaluation_strategy="steps",  # evaluation strategy to adopt during training
         # `no`: No evaluation during training.
         # `steps`: Evaluate every `eval_steps`.
         # `epoch`: Evaluate every end of epoch.
-        eval_steps=conf.train.eval_steps,  # 해당 스탭마다 valid set을 이용해서 모델을 평가합니다. 이 값을 기준으로 save_steps 모델이 저장됩니다.
+        eval_steps=914,  # evaluation step.
         load_best_model_at_end=True,
-        # huggingface hub에 모델을 저장합니다.
-        # push_to_hub=True를 설정하는 경우 trainer.save_model() 단계에서 에러가 발생합니다. 둘 중에 하나만 사용해주세요!!!
-        # push_to_hub=True,  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
-        metric_for_best_model=conf.utils.monitor,  # 평가 기준으로 할 loss값을 설정합니다.
-    )
-    trainer = Trainer(
-        model=model,
-        args=training_args,  # 위에서 설정한 training_args를 가져옵니다.
-        train_dataset=RE_train_dataset,  # training dataset
-        eval_dataset=RE_dev_dataset,  # evaluation dataset
-        compute_metrics=utils.compute_metrics,  # utils에 있는 평가 매트릭을 가져옵니다.
-        data_collator=data_collator,
-        optimizers=(optimizer, scheduler),
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=conf.utils.patience)],
+        #push_to_hub=False,
+        metric_for_best_model="micro f1 score",
     )
 
+    # for hyper parameter search
+    custom_trainer = CustomTrainer.CustomTrainer(
+        args=training_args,  # training arguments, defined above
+        train_dataset=RE_train_dataset,  # training dataset
+        eval_dataset=RE_dev_dataset,  # evaluation dataset
+        compute_metrics=utils.compute_metrics,  # define metrics function
+        data_collator=data_collator,
+        model_init=model_init,
+        # optimizers=(optimizer, scheduler), # Error : `model_init` is incompatible with `optimizers`
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=conf.utils.patience)],
+        model=model,  # 🤗 for Transformers model parameter
+        conf=conf,
+    )
+
+    best_run = custom_trainer.hyperparameter_search(
+        direction="maximize",
+        backend="ray",
+        hp_space=ray_hp_space,
+        n_trials=2,
+    )
+
+    print(best_run)
+    print("Before:", custom_trainer.args)
+    # 참고 예정
+    # best_run으로 받아온 best hyperparameter로 재학습
+    # https://github.com/huggingface/setfit/blob/ebee18ceaecb4414482e0a6b92c97f3f99309d56/scripts/transformers/run_fewshot.py
+    for key, value in best_run.hyperparameters.items():
+        setattr(custom_trainer.args, key, value)
+
+    trainer = Trainer(
+        model=model,  # the instantiated 🤗 Transformers model to be trained
+        args=training_args,  # training arguments, defined above
+        train_dataset=RE_train_dataset,  # training dataset
+        eval_dataset=RE_train_dataset,  # evaluation dataset
+        compute_metrics=utils.compute_metrics,  # define metrics function
+        data_collator=data_collator,
+        # optimizers=optimizers,
+        # model_init=model_init,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
+    )
+
+    print("After:", trainer.args)
+
+    # train model
     trainer.train()
-    # train 과정에서 가장 평가 점수가 좋은 모델을 저장합니다.
-    # best_model 폴더에 저장됩니다.
+    # trainer.push_to_hub() # Error! DENIED update refs/heads/dev: forbidden
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
     
     mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
@@ -185,6 +216,7 @@ def train(conf):
     print("eval auprc: ", metrics["eval_auprc"])
     print("eval micro f1 score: ", metrics["eval_micro f1 score"])
 
+    
     # best_model 저장할 때 사용했던 config파일도 같이 저장합니다.
     if not os.path.exists(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}"):
         os.makedirs(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
@@ -215,6 +247,13 @@ def train(conf):
         output.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/dev_submission_{train_start_time}.csv", index=False)
         output.to_csv(f"./prediction/dev_submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
     if(predict_submit):
+        metrics = trainer.evaluate(RE_test_dataset)
+        print("Training is complete!")
+        print("==================== Test metric score ====================")
+        print("eval loss: ", metrics["eval_loss"])
+        print("eval auprc: ", metrics["eval_auprc"])
+        print("eval micro f1 score: ", metrics["eval_micro f1 score"])
+
         outputs1 = trainer.predict(RE_predict_dataset)
         logits1 = torch.FloatTensor(outputs1.predictions)
         prob1 = F.softmax(logits1, dim=-1).detach().cpu().numpy()
@@ -230,3 +269,20 @@ def train(conf):
 
         output1.to_csv(f"./prediction/submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
         output1.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/submission_{train_start_time}.csv", index=False)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--shuffle", default=True)
+    # parser.add_argument('--optimizer', default='AdamW')
+
+    parser.add_argument("--preprocessing", default=False)
+    parser.add_argument("--precision", default=32, type=int)
+    parser.add_argument("--dropout", default=0.1, type=float)
+    args = parser.parse_args()
+
+    conf = OmegaConf.load(f"./config/{args.config}.yaml")
+    # check hyperparameter arguments
+    print(args)
+    train(args, conf)

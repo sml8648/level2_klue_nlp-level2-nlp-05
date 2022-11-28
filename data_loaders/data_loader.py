@@ -52,6 +52,19 @@ def tokenized_dataset(dataset, tokenizer,conf):
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             data.append(output)     #[{input_ids, attention_mask, token_type_ids}]
 
+    elif conf.data.tem == 4:  # pair구하기
+        for _, item in tqdm(dataset.iterrows(), desc="add_entity_type_token & tokenizing", total=len(dataset)):
+            sent = add_entity_token(item, 1)
+            se = literal_eval(item['subject_entity'])['type']
+            oe = literal_eval(item['object_entity'])['type']
+            if((se, oe) == ('LOC','DAT')):
+                output.attention_mask[0] = 2
+            else:
+                pairs = [('ORG','PER'), ('ORG','ORG'), ('ORG','DAT'), ('ORG','LOC'), ('ORG','POH'), ('ORG','NOH'), ('PER','PER'), ('PER','ORG'), ('PER','DAT'), ('PER','LOC'), ('PER','POH'), ('PER','NOH')]
+                output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
+                output.attention_mask[0] = pairs.index((se, oe))
+            data.append(output)     #[{input_ids, attention_mask, token_type_ids}]
+
     elif conf.data.tem == 2:  # typed entity marker + emask
         '''
         1. 스페셜 토큰을 사용하여 typed entity marker 표시
