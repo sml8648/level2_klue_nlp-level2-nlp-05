@@ -73,7 +73,7 @@ def add_entity_token_without_type(row):
 
 
 ### notion에서 그대로 가져온 코드라서 Refactoring 필요!! ###
-def add_entity_token_freq(row):
+def add_entity_token_korean(row):
     entitiy_type_korean = {"ORG": "단체", "PER": "사람", "DAT": "날짜", "LOC": "위치", "POH": "기타", "NOH": "수량"}
     sent = row['sentence']      #sentence
     se = literal_eval(row['subject_entity'])  #subject entity
@@ -104,7 +104,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
     data = []
     if conf.data.tem == 3:  # entity marker만 사용
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token & tokenizing", total=len(dataset)):
-            sent = add_entity_token_without_type(item)
+            sent = add_entity_token_freq(item)
             sent = replace_entity_token(sent)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             sub_token = '@'
@@ -126,7 +126,7 @@ def tokenized_dataset(dataset, tokenizer,conf):
 
     elif conf.data.tem == 1:  # Typed entity marker만 사용
         for _, item in tqdm(dataset.iterrows(), desc="add_entity_token", total=len(dataset)):
-            sent = add_entity_token(item)
+            sent = add_entity_token_freq(item)
             sent = replace_entity_token(sent)
             output = tokenizer(sent, padding=True, truncation=True, max_length=256, add_special_tokens=True, return_token_type_ids=False)
             data.append(output)
