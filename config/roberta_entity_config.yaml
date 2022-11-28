@@ -1,10 +1,10 @@
 path:
-  train_path: ./dataset/pretrain/train.csv
+  train_path: ./dataset/train/train.csv
   dev_path: ./dataset/dev/dev.csv
   test_path: ./dataset/test/test.csv
   predict_path: ./dataset/predict/predict.csv
   # inference를 하는 경우 로드할 모델의 경로를 입력해주세요.
-  load_model_path: /opt/ml/level2_klue(entity-1124)/step_saved_model/klue-roberta-large/24-15-21/checkpoint-4000/pytorch_model.bin
+  load_model_path: /opt/ml/level2_klue(entity-1128)/step_saved_model/klue-roberta-large/27-19-02/checkpoint-10000/pytorch_model.bin
 model:
   model_class_name: RobertaForSequenceClassificationWithEntity #model.py에서 사용할 모델 이름
   # Model : Model
@@ -30,7 +30,7 @@ train:
   # save_steps은 반드시 eval_steps의 배수여야 합니다!!!! """n * save_steps = eval_steps"""
   eval_steps: 1000
   logging_steps: 500
-  dropout: 0.2
+  dropout: 0.15
   rdrop: False # rdrop 사용시 batch_size / 2
   
 utils:
