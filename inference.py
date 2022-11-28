@@ -16,7 +16,7 @@ from transformers import DataCollatorWithPadding
 from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 from collections import defaultdict
 from pydoc import locate
-
+import os
 
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
@@ -51,6 +51,9 @@ def inference(conf):
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
     data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
+    print(conf.path.load_model_path)
+    path = os.path.dirname(conf.path.load_model_path)
+    print(path)
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
     # tokenizer.add_special_tokens()
     # tokenizer.add_tokens()
@@ -110,6 +113,7 @@ def inference(conf):
         output["pred_label"] = pred_answer
         output["probs"] = output_prob
 
+        output.to_csv(os.path.join(path, f'dev_submission_{inference_start_time}.csv'), index=False)
         output.to_csv(f"./prediction/dev_submission_{inference_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
     if(predict_submit):
         metrics = trainer.evaluate(RE_test_dataset)
@@ -132,6 +136,7 @@ def inference(conf):
         output["pred_label"] = pred_answer
         output["probs"] = output_prob
 
+        output.to_csv(os.path.join(path, f'submission_{inference_start_time}.csv'), index=False)
         output.to_csv(f"./prediction/submission_{inference_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
     #### 필수!! ##############################################
     print("==================== Inference finish! ====================")
