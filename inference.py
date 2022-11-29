@@ -1,47 +1,18 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
-
-from transformers import AutoConfig
-import model.model as model_arch
-import model.modeling_roberta as roberta_arch
-
-import data_loaders.data_loader as dataloader
-import utils.util as utils
+import os
+import pickle as pickle
+from pydoc import locate
+from datetime import datetime
 
 import pandas as pd
+
 import torch
 import torch.nn.functional as F
 
-import pickle as pickle
-from datetime import datetime
-from transformers import DataCollatorWithPadding
-from typing import Dict, List, Union
-from collections import defaultdict
-from pydoc import locate
-import os
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 
-
-class MyDataCollatorWithPadding(DataCollatorWithPadding):
-    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        max_len = 0
-        for i in features:
-            if len(i["input_ids"]) > max_len:
-                max_len = len(i["input_ids"])
-
-        batch = defaultdict(list)
-        for item in features:
-            for k in item:
-                if "label" not in k:
-                    padding_len = max_len - item[k].size(0)
-                    if k == "input_ids":
-                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id] * padding_len)), dim=0)
-                    else:
-                        item[k] = torch.cat((item[k], torch.tensor([0] * padding_len)), dim=0)
-                batch[k].append(item[k])
-
-        for k in batch:
-            batch[k] = torch.stack(batch[k], dim=0)
-            batch[k] = batch[k].to(torch.long)
-        return batch
+import data_loaders.data_loader as dataloader
+from data_loaders.data_loader import MyDataCollatorWithPadding
+import utils.util as utils
 
 
 def inference(conf):
@@ -49,7 +20,7 @@ def inference(conf):
     now = datetime.now()
     inference_start_time = now.strftime("%d-%H-%M")
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = conf.model.model_name
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
     data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
@@ -58,7 +29,7 @@ def inference(conf):
     path = os.path.dirname(conf.path.load_model_path)
     print(path)
 
-    if conf.data.tem == 2:  # typed entity token에 쓰이는 스페셜 토큰
+    if conf.data.dataloader == "typed_entity_marker_emask":
         special_tokens_dict = {"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]}
         tokenizer.add_special_tokens(special_tokens_dict)
 
@@ -66,10 +37,10 @@ def inference(conf):
     checkpoint = torch.load(load_model_path)
 
     # 모델 구조를 가져옵니다.
-    if conf.model.model_class_name == "TAPT":
+    if conf.model.use_tapt_model:
         model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
     else:
-        model_class = locate(f"model.model.{conf.model.model_class_name}")
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
         model = model_class(conf, len(tokenizer))
 
     # 모델 구조 위에 checkpoint를 덮어씌웁니다.

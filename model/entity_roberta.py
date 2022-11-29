@@ -1,8 +1,6 @@
 from transformers import AutoConfig, AutoModel
 
 from transformers.models.roberta.modeling_roberta import (
-    RobertaModel,
-    RobertaClassificationHead,
     RobertaEncoder,
     RobertaEmbeddings,
     RobertaPooler,
@@ -11,11 +9,11 @@ from transformers.models.roberta.modeling_roberta import (
 import transformers
 from transformers.modeling_outputs import BaseModelOutputWithPoolingAndCrossAttentions, SequenceClassifierOutput
 from torch import nn
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 import torch
 import model.loss as loss_module
 from torch.cuda.amp import autocast
 import torch
+
 
 class RobertaEmbeddingsWithEntity(RobertaEmbeddings):
     """Roberta Embedding with entity embedding"""
@@ -37,13 +35,9 @@ class RobertaEmbeddingsWithEntity(RobertaEmbeddings):
         if position_ids is None:
             if input_ids is not None:
                 # Create the position ids from the input token ids. Any padded tokens remain padded.
-                position_ids = create_position_ids_from_input_ids(
-                    input_ids, self.padding_idx, past_key_values_length
-                )
+                position_ids = create_position_ids_from_input_ids(input_ids, self.padding_idx, past_key_values_length)
             else:
-                position_ids = self.create_position_ids_from_inputs_embeds(
-                    inputs_embeds
-                )
+                position_ids = self.create_position_ids_from_inputs_embeds(inputs_embeds)
 
         if input_ids is not None:
             input_shape = input_ids.size()
@@ -55,14 +49,10 @@ class RobertaEmbeddingsWithEntity(RobertaEmbeddings):
         if token_type_ids is None:
             if hasattr(self, "token_type_ids"):
                 buffered_token_type_ids = self.token_type_ids[:, :seq_length]
-                buffered_token_type_ids_expanded = buffered_token_type_ids.expand(
-                    input_shape[0], seq_length
-                )
+                buffered_token_type_ids_expanded = buffered_token_type_ids.expand(input_shape[0], seq_length)
                 token_type_ids = buffered_token_type_ids_expanded
             else:
-                token_type_ids = torch.zeros(
-                    input_shape, dtype=torch.long, device=self.position_ids.device
-                )
+                token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=self.position_ids.device)
 
         if inputs_embeds is None:
             inputs_embeds = self.word_embeddings(input_ids)
@@ -100,11 +90,13 @@ class RobertaEmbeddingsWithEntity(RobertaEmbeddings):
         )
         return position_ids.unsqueeze(0).expand(input_shape)
 
+
 class RobertaModelWithEntity(RobertaPreTrainedModel):
     """
     Roberta Model with entity embedding
-    
+
     """
+
     def __init__(self, config, add_pooling_layer=True):
         super().__init__(config)
         self.config = config
@@ -131,31 +123,29 @@ class RobertaModelWithEntity(RobertaPreTrainedModel):
         """
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
-    ### 이게 필요한가??? ###
 
+    ### 이게 필요한가??? ###
 
     def forward(
         self,
-        input_ids = None,
-        attention_mask = None,
-        token_type_ids = None,
-        position_ids = None,
-        entity_ids = None,
-        head_mask = None,
-        inputs_embeds = None,
-        encoder_hidden_states = None,
-        encoder_attention_mask = None,
-        past_key_values = None,
-        use_cache = None,
-        output_attentions = None,
-        output_hidden_states = None,
-        return_dict = None,
-    ) :
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        entity_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        past_key_values=None,
+        use_cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+    ):
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
-        )
+        output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if self.config.is_decoder:
@@ -205,7 +195,7 @@ class RobertaModelWithEntity(RobertaPreTrainedModel):
         embedding_output = self.embeddings(
             input_ids=input_ids,
             position_ids=position_ids,
-            entity_ids=entity_ids,           # entity id 추가
+            entity_ids=entity_ids,  # entity id 추가
             token_type_ids=token_type_ids,
             inputs_embeds=inputs_embeds,
             past_key_values_length=past_key_values_length,
@@ -237,6 +227,7 @@ class RobertaModelWithEntity(RobertaPreTrainedModel):
             cross_attentions=encoder_outputs.cross_attentions,
         )
 
+
 class RobertaForSequenceClassificationWithEntity(nn.Module):
     """
     Roberta model with entity embedding for sequence classification + with LSTM classifier
@@ -249,8 +240,8 @@ class RobertaForSequenceClassificationWithEntity(nn.Module):
         self.model_name = conf.model.model_name
 
         self.config = transformers.AutoConfig.from_pretrained(self.model_name)
-        self.roberta = RobertaModelWithEntity.from_pretrained(self.model_name) 
-        self.classifier = RobertaClassificationHeadLSTM(self.config, self.conf) # 기존 classifier를 LSTM으로 수정
+        self.roberta = RobertaModelWithEntity.from_pretrained(self.model_name)
+        self.classifier = RobertaClassificationHeadLSTM(self.config, self.conf)  # 기존 classifier를 LSTM으로 수정
         self.roberta.resize_token_embeddings(new_vocab_size)
         self.loss_fct = loss_module.loss_config[self.conf.train.loss]
 
@@ -259,17 +250,17 @@ class RobertaForSequenceClassificationWithEntity(nn.Module):
 
     def forward(
         self,
-        input_ids = None,
-        attention_mask = None,
-        token_type_ids = None,
-        position_ids = None,
-        head_mask = None,
-        inputs_embeds = None,
-        labels = None,
-        output_attentions = None,
-        output_hidden_states = None,
-        return_dict = None,
-    ) :
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+    ):
         r"""
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
             Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
@@ -317,9 +308,9 @@ class RobertaClassificationHead(nn.Module):
         self.conf = conf
         self.hidden_dim = config.hidden_size
 
-        self.dense = nn.Linear(self.hidden_dim , self.hidden_dim )
+        self.dense = nn.Linear(self.hidden_dim, self.hidden_dim)
         self.dropout = nn.Dropout(self.conf.train.dropout)
-        self.out_proj = nn.Linear(self.hidden_dim , self.num_labels)
+        self.out_proj = nn.Linear(self.hidden_dim, self.num_labels)
 
     def forward(self, features, **kwargs):
         x = features[:, 0, :]  # take <s> token (equiv. to [CLS])
@@ -331,7 +322,6 @@ class RobertaClassificationHead(nn.Module):
         return x
 
 
-
 class RobertaClassificationHeadLSTM(nn.Module):
     """Head for sentence-level classification tasks with LSTM"""
 
@@ -341,8 +331,7 @@ class RobertaClassificationHeadLSTM(nn.Module):
         self.conf = conf
         self.hidden_dim = config.hidden_size
 
-        self.lstm = nn.LSTM(self.hidden_dim, self.hidden_dim//2, num_layers=2, dropout=conf.train.dropout,
-                             batch_first=True, bidirectional=True)
+        self.lstm = nn.LSTM(self.hidden_dim, self.hidden_dim // 2, num_layers=2, dropout=conf.train.dropout, batch_first=True, bidirectional=True)
         self.dense = nn.Linear(self.hidden_dim, self.hidden_dim * 4)
         self.activation = torch.tanh
         self.dropout = nn.Dropout(self.conf.train.dropout)
@@ -350,9 +339,9 @@ class RobertaClassificationHeadLSTM(nn.Module):
 
     def forward(self, features, **kwargs):
         # LSTM last hidden, cell state shape : (2, 244, 1024) (num_layer, seq_len, hidden_size)
-        lstm_output, (last_hidden, last_cell)= self.lstm(features)
+        lstm_output, (last_hidden, last_cell) = self.lstm(features)
         # (16, 1024) (batch, hidden_dim)
-        cat_hidden = torch.cat((last_hidden[0], last_hidden[1]), dim = 1)
+        cat_hidden = torch.cat((last_hidden[0], last_hidden[1]), dim=1)
         x = self.dropout(cat_hidden)
         x = self.dense(x)
         x = self.activation(x)
@@ -361,11 +350,7 @@ class RobertaClassificationHeadLSTM(nn.Module):
         return x
 
 
-def create_position_ids_from_input_ids(
-    input_ids, padding_idx, past_key_values_length=0
-):
+def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_length=0):
     mask = input_ids.ne(padding_idx).int()
-    incremental_indices = (
-        torch.cumsum(mask, dim=1).type_as(mask) + past_key_values_length
-    ) * mask
+    incremental_indices = (torch.cumsum(mask, dim=1).type_as(mask) + past_key_values_length) * mask
     return incremental_indices.long() + padding_idx

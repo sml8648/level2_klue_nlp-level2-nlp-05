@@ -1,57 +1,27 @@
+import re
+from datetime import datetime
+from pydoc import locate
+
+import pandas as pd
+
 import torch
+import torch.nn.functional as F
 from torch.optim.lr_scheduler import OneCycleLR
 
-# https://huggingface.co/transformers/v3.0.2/_modules/transformers/trainer.html
-# https://huggingface.co/course/chapter3/4
 import transformers
-from transformers import DataCollatorWithPadding, EarlyStoppingCallback
+from transformers import EarlyStoppingCallback
 from transformers import AutoTokenizer, Trainer, TrainingArguments, AutoConfig
 from transformers import AutoModelForSequenceClassification
 
 import data_loaders.data_loader as dataloader
+from data_loaders.data_loader import MyDataCollatorWithPadding
 import utils.util as utils
-import model.model as model_arch
-import model.modeling_roberta as roberta_arch
 
 import mlflow
 import mlflow.sklearn
 from azureml.core import Workspace
 
-from datetime import datetime
-import re
-import os
 from omegaconf import OmegaConf
-from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
-from collections import defaultdict
-from pydoc import locate
-
-import pandas as pd
-import torch
-import torch.nn.functional as F
-
-
-class MyDataCollatorWithPadding(DataCollatorWithPadding):
-    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        max_len = 0
-        for i in features:
-            if len(i["input_ids"]) > max_len:
-                max_len = len(i["input_ids"])
-
-        batch = defaultdict(list)
-        for item in features:
-            for k in item:
-                if "label" not in k:
-                    padding_len = max_len - item[k].size(0)
-                    if k == "input_ids":
-                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id] * padding_len)), dim=0)
-                    else:
-                        item[k] = torch.cat((item[k], torch.tensor([0] * padding_len)), dim=0)
-                batch[k].append(item[k])
-
-        for k in batch:
-            batch[k] = torch.stack(batch[k], dim=0)
-            batch[k] = batch[k].to(torch.long)
-        return batch
 
 
 def start_mlflow(experiment_name):
@@ -73,12 +43,13 @@ def train(conf):
     now = datetime.now()
     train_start_time = now.strftime("%d-%H-%M")
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_name = conf.model.model_name
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    if conf.data.tem == 2:  # typed entity token에 쓰이는 스페셜 토큰
+    # add special token in rbert model
+    if conf.data.dataloader == "typed_entity_marker_emask":
         special_tokens_dict = {"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]}
         tokenizer.add_special_tokens(special_tokens_dict)
 
@@ -94,16 +65,16 @@ def train(conf):
     RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path, conf)
     RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path, conf)
 
-    continue_train = False
-    if continue_train:
-        model_config = AutoConfig.from_pretrained(model_name)
-        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+    if conf.train.continue_train:
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
+        model = model_class(conf, len(tokenizer))
         checkpoint = torch.load(conf.path.load_model_path)
         model.load_state_dict(checkpoint)
-    elif conf.model.model_class_name == "TAPT":
+    # TAPT로 학습된 모델 로드
+    elif conf.model.use_tapt_model:
         model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
     else:
-        model_class = locate(f"model.model.{conf.model.model_class_name}")
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
         model = model_class(conf, len(tokenizer))
 
     model.parameters
@@ -135,7 +106,7 @@ def train(conf):
         learning_rate=conf.train.learning_rate,  # learning_rate
         per_device_train_batch_size=conf.train.batch_size,  # train batch size
         per_device_eval_batch_size=conf.train.batch_size,  # valid batch size
-        logging_dir="./logs",  # directory for storing logs 로그 경로 설정인데 폴더가 안생김?
+        logging_dir="./logs",
         logging_steps=conf.train.logging_steps,  # 해당 스탭마다 loss, lr, epoch가 cmd에 출력됩니다.
         evaluation_strategy="steps",
         eval_steps=conf.train.eval_steps,  # 해당 스탭마다 valid set을 이용해서 모델을 평가합니다. 이 값을 기준으로 save_steps 모델이 저장됩니다.
@@ -168,18 +139,16 @@ def train(conf):
     print("eval micro f1 score: ", metrics["eval_micro f1 score"])
 
     # best_model 저장할 때 사용했던 config파일도 같이 저장합니다.
-    if not os.path.exists(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}"):
-        os.makedirs(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
     with open(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/config.yaml", "w+") as fp:
         OmegaConf.save(config=conf, f=fp.name)
 
     # best_model 로드
     load_model_path = f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/pytorch_model.bin"
     checkpoint = torch.load(load_model_path)
-    model_class = locate(f"model.model.{conf.model.model_class_name}")
+    model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
     model = model_class(conf, len(tokenizer))
-
     model.load_state_dict(checkpoint)
+
     model.parameters
     model.to(device)
     model.eval()

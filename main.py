@@ -14,13 +14,12 @@ from omegaconf import OmegaConf
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # 여기서 omegaconfig 파일 이름 설정하고 실행해주세요.
-    parser.add_argument("--config", "-c", type=str, default="tapt-klue-roberta")
+    parser.add_argument("--config", "-c", type=str, default="base_config")
     parser.add_argument("--mode", "-m", required=True)
 
     args = parser.parse_args()
     conf = OmegaConf.load(f"./config/{args.config}.yaml")
 
-    # 시드 설정을 해야될까요?
     # SEED = conf.utils.seed
     # random.seed(SEED)
     # np.random.seed(SEED)

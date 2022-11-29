@@ -3,6 +3,7 @@ from torch import nn
 import torch
 import model.loss as loss_module
 from torch.cuda.amp import autocast
+from model.model import FCLayer
 
 
 class AuxiliaryModel(nn.Module):
@@ -16,7 +17,7 @@ class AuxiliaryModel(nn.Module):
     """
 
     def __init__(self, conf, new_vocab_size):
-        super().__init__(conf, new_vocab_size)
+        super().__init__()
         self.num_labels = 30
         self.conf = conf
         self.model_name = conf.model.model_name
@@ -94,7 +95,7 @@ class AuxiliaryModel2(nn.Module):
     """
 
     def __init__(self, conf, new_vocab_size):
-        super().__init__(conf, new_vocab_size)
+        super().__init__()
         self.num_labels = 30
         self.conf = conf
         self.model_name = conf.model.model_name
@@ -345,6 +346,45 @@ class AuxiliaryModelWithRBERT(AuxiliaryModel):
         binary_loss = binary_ce_loss + alpha * binary_kl_loss
         return self.weight[0] * binary_loss + self.weight[1] * loss
 
+    def get_classifier_input(self, input_ids, attention_mask, token_type_ids=None, e1_mask=None, e2_mask=None, e3_mask=None, e4_mask=None):
+        outputs = self.model(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)  # sequence_output, pooled_output, (hidden_states), (attentions)
+        sequence_output = outputs[0]  # last hidden state
+        pooled_output = outputs[1]  # [CLS]
+
+        # Average
+        e1_h = self.entity_average(sequence_output, e1_mask)
+        e2_h = self.entity_average(sequence_output, e2_mask)
+        e3_h = self.entity_average(sequence_output, e3_mask)
+        e4_h = self.entity_average(sequence_output, e4_mask)
+
+        # Concat -> fc_layer
+        pooled_output = self.cls_fc_layer(pooled_output)
+        e1_h = self.entity_fc_layer(e1_h)
+        e2_h = self.entity_fc_layer(e2_h)
+
+        # e3와 e4는 어떻게 할까?(fc layer 써야하나? e1,e1와 같은거로? 다른거로?-> nouse
+
+        # concat 후 분류
+        concat_h = torch.cat([pooled_output, e1_h, e2_h, e3_h, e4_h], dim=-1)  # (batch_size, hidden_dim * 5)
+        return concat_h
+
+    @staticmethod
+    def entity_average(hidden_output, e_mask):  # 엔티티 안의 토큰들의 임베딩 평균
+        """
+        Average the entity hidden state vectors (H_i ~ H_j)
+        :param hidden_output: [batch_size, j-i+1, dim]
+        :param e_mask: [batch_size, max_seq_len]
+                e.g. e_mask[0] == [0, 0, 0, 1, 1, 1, 0, 0, ... 0]
+        :return: [batch_size, dim]
+        """
+        e_mask_unsqueeze = e_mask.unsqueeze(1)  # [b, 1, max_seq_len]
+        length_tensor = (e_mask != 0).sum(dim=1).unsqueeze(1)  # [batch_size, 1]
+
+        # [b, 1, j-i+1] * [b, j-i+1, dim] = [b, 1, dim] -> [b, dim]
+        sum_vector = torch.bmm(e_mask_unsqueeze.float(), hidden_output).squeeze(1)
+        avg_vector = sum_vector.float() / length_tensor.float()  # broadcasting
+        return avg_vector
+
 
 class AuxiliaryModel2WithRBERT(AuxiliaryModel):
     """
@@ -493,22 +533,41 @@ class AuxiliaryModel2WithRBERT(AuxiliaryModel):
         binary_loss = binary_ce_loss + alpha * binary_kl_loss
         return self.weight[0] * binary_loss + self.weight[1] * loss
 
+    def get_classifier_input(self, input_ids, attention_mask, token_type_ids=None, e1_mask=None, e2_mask=None, e3_mask=None, e4_mask=None):
+        outputs = self.model(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)  # sequence_output, pooled_output, (hidden_states), (attentions)
+        sequence_output = outputs[0]  # last hidden state
+        pooled_output = outputs[1]  # [CLS]
 
-class FCLayer(nn.Module):  # fully connected layer
-    """
-    RBERT emask를 위한 Fully Connected layer
-    데이터 -> BERT 모델 -> emask 평균 -> FC layer -> 분류(FC layer)
-    """
+        # Average
+        e1_h = self.entity_average(sequence_output, e1_mask)
+        e2_h = self.entity_average(sequence_output, e2_mask)
+        e3_h = self.entity_average(sequence_output, e3_mask)
+        e4_h = self.entity_average(sequence_output, e4_mask)
 
-    def __init__(self, input_dim, output_dim, dropout_rate=0.1, use_activation=True):
-        super(FCLayer, self).__init__()
-        self.use_activation = use_activation
-        self.dropout = nn.Dropout(dropout_rate)
-        self.linear = nn.Linear(input_dim, output_dim)
-        self.tanh = nn.Tanh()
+        # Concat -> fc_layer
+        pooled_output = self.cls_fc_layer(pooled_output)
+        e1_h = self.entity_fc_layer(e1_h)
+        e2_h = self.entity_fc_layer(e2_h)
 
-    def forward(self, x):  # W(tanh(x))+b
-        x = self.dropout(x)
-        if self.use_activation:
-            x = self.tanh(x)
-        return self.linear(x)
+        # e3와 e4는 어떻게 할까?(fc layer 써야하나? e1,e1와 같은거로? 다른거로?-> nouse
+
+        # concat 후 분류
+        concat_h = torch.cat([pooled_output, e1_h, e2_h, e3_h, e4_h], dim=-1)  # (batch_size, hidden_dim * 5)
+        return concat_h
+
+    @staticmethod
+    def entity_average(hidden_output, e_mask):  # 엔티티 안의 토큰들의 임베딩 평균
+        """
+        Average the entity hidden state vectors (H_i ~ H_j)
+        :param hidden_output: [batch_size, j-i+1, dim]
+        :param e_mask: [batch_size, max_seq_len]
+                e.g. e_mask[0] == [0, 0, 0, 1, 1, 1, 0, 0, ... 0]
+        :return: [batch_size, dim]
+        """
+        e_mask_unsqueeze = e_mask.unsqueeze(1)  # [b, 1, max_seq_len]
+        length_tensor = (e_mask != 0).sum(dim=1).unsqueeze(1)  # [batch_size, 1]
+
+        # [b, 1, j-i+1] * [b, j-i+1, dim] = [b, 1, dim] -> [b, dim]
+        sum_vector = torch.bmm(e_mask_unsqueeze.float(), hidden_output).squeeze(1)
+        avg_vector = sum_vector.float() / length_tensor.float()  # broadcasting
+        return avg_vector

@@ -2,7 +2,6 @@ from transformers import RobertaForSequenceClassification
 from torch import nn
 import model.loss as loss_module
 from torch.cuda.amp import autocast
-import torch
 
 
 class Model(nn.Module):
@@ -41,3 +40,23 @@ class Model(nn.Module):
         # carefully choose hyper-parameters
         loss = ce_loss + alpha * kl_loss
         return loss
+
+
+class FCLayer(nn.Module):  # fully connected layer
+    """
+    RBERT emask를 위한 Fully Connected layer
+    데이터 -> BERT 모델 -> emask 평균 -> FC layer -> 분류(FC layer)
+    """
+
+    def __init__(self, input_dim, output_dim, dropout_rate=0.1, use_activation=True):
+        super(FCLayer, self).__init__()
+        self.use_activation = use_activation
+        self.dropout = nn.Dropout(dropout_rate)
+        self.linear = nn.Linear(input_dim, output_dim)
+        self.tanh = nn.Tanh()
+
+    def forward(self, x):  # W(tanh(x))+b
+        x = self.dropout(x)
+        if self.use_activation:
+            x = self.tanh(x)
+        return self.linear(x)
