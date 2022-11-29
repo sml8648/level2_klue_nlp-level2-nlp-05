@@ -3,7 +3,6 @@ from torch import nn
 import torch
 import model.loss as loss_module
 from torch.cuda.amp import autocast
-import torch
 
 
 class CustomRBERT(nn.Module):
@@ -46,7 +45,7 @@ class CustomRBERT(nn.Module):
                 e.g. e_mask[0] == [0, 0, 0, 1, 1, 1, 0, 0, ... 0]
         :return: [batch_size, dim]
         """
-        e_mask_unsqueeze = e_mask.unsqueeze(1)  # [b, 1, j-i+1]
+        e_mask_unsqueeze = e_mask.unsqueeze(1)  # [b, 1, max_seq_len]
         length_tensor = (e_mask != 0).sum(dim=1).unsqueeze(1)  # [batch_size, 1]
 
         # [b, 1, j-i+1] * [b, j-i+1, dim] = [b, 1, dim] -> [b, dim]
@@ -69,8 +68,6 @@ class CustomRBERT(nn.Module):
         pooled_output = self.cls_fc_layer(pooled_output)
         e1_h = self.entity_fc_layer(e1_h)
         e2_h = self.entity_fc_layer(e2_h)
-
-        # e3와 e4는 어떻게 할까?(fc layer 써야하나? e1,e1와 같은거로? 다른거로?-> nouse
 
         # concat 후 분류
         concat_h = torch.cat([pooled_output, e1_h, e2_h, e3_h, e4_h], dim=-1)

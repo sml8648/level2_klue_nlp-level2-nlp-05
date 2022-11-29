@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import pickle as pickle
 from datetime import datetime
 from transformers import DataCollatorWithPadding
-from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
+from typing import Dict, List, Union
 from collections import defaultdict
 from pydoc import locate
 import os
@@ -57,15 +57,11 @@ def inference(conf):
     print(conf.path.load_model_path)
     path = os.path.dirname(conf.path.load_model_path)
     print(path)
-    # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
-    # tokenizer.add_special_tokens()
-    # tokenizer.add_tokens()
 
     if conf.data.tem == 2:  # typed entity token에 쓰이는 스페셜 토큰
         special_tokens_dict = {"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]}
         tokenizer.add_special_tokens(special_tokens_dict)
 
-    # .bin을 가져옵니다.
     load_model_path = conf.path.load_model_path
     checkpoint = torch.load(load_model_path)
 
@@ -75,7 +71,6 @@ def inference(conf):
     else:
         model_class = locate(f"model.model.{conf.model.model_class_name}")
         model = model_class(conf, len(tokenizer))
-    ### Refactoring 필요!!
 
     # 모델 구조 위에 checkpoint를 덮어씌웁니다.
     # 모델 구조와 checkpoint에 저장되어 있는 파라미터 구조가 다른 경우 에러가 발생합니다.
@@ -88,12 +83,8 @@ def inference(conf):
     RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path, conf)
     RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path, conf)
 
-    # arguments for Trainer
-    # predict data를 padding없이 입력하기 위해 batch_size를 1로 입력합니다.
-    # batch_size를 키우고 싶은 경우엔 trainer에 collator를 추가해서 실행시켜주세요.
-    test_args = TrainingArguments(output_dir="./prediction", do_train=False, do_predict=True, per_device_eval_batch_size=16, dataloader_drop_last=False)
-
     # init trainer
+    test_args = TrainingArguments(output_dir="./prediction", do_train=False, do_predict=True, per_device_eval_batch_size=16, dataloader_drop_last=False)
     trainer = Trainer(model=model, args=test_args, compute_metrics=utils.compute_metrics, data_collator=data_collator)
 
     # Test 점수 확인

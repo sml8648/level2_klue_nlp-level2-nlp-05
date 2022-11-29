@@ -3,7 +3,6 @@ from torch import nn
 import torch
 import model.loss as loss_module
 from torch.cuda.amp import autocast
-import torch
 
 
 class RECENTModel(nn.Module):

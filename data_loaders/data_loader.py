@@ -76,65 +76,6 @@ def add_entity_token(row, tem):
     return new_sent
 
 
-def add_entity_token_without_type(row, tem):
-    """
-    before
-    〈Something〉는 조지 해리슨이 쓰고 비틀즈가 1969년 앨범 《Abbey Road》에 담은 노래다.,
-    "{'word': '비틀즈', 'start_idx': 24, 'end_idx': 26, 'type': 'ORG'}",
-    "{'word': '조지 해리슨', 'start_idx': 13, 'end_idx': 18, 'type': 'PER'}"
-
-    after
-    〈Something〉는 <e2> 조지 해리슨 </e2> 이 쓰고 <e1> 비틀즈 </e1> 가 1969년 앨범 《Abbey Road》에 담은 노래다
-    """
-    # entity token list. tem == 1 : 특수기호 토큰, tem == 2 : 스페셜 토큰
-    etl = [[], ["@", "@", "#", "#", "*", "*", "%", "%"], ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]]
-
-    sent = row["sentence"]  # sentence
-    se = literal_eval(row["subject_entity"])  # subject entity
-    oe = literal_eval(row["object_entity"])  # object entity
-    se["end_idx"] = se["start_idx"] + len(se["word"].split(",")[0]) - 1
-    oe["end_idx"] = oe["start_idx"] + len(oe["word"].split(",")[0]) - 1
-    new_sent = ""
-    if se["start_idx"] < oe["start_idx"]:  # 문장에 subject -> object 순으로 등장
-        new_sent = (
-            sent[: se["start_idx"]]
-            + etl[tem][0]
-            + etl[tem][4]
-            + se["type"]
-            + etl[tem][5]
-            + sent[se["start_idx"] : se["end_idx"] + 1]
-            + etl[tem][1]
-            + sent[se["end_idx"] + 1 : oe["start_idx"]]
-            + etl[tem][2]
-            + etl[tem][6]
-            + oe["type"]
-            + etl[tem][7]
-            + sent[oe["start_idx"] : oe["end_idx"] + 1]
-            + etl[tem][3]
-            + sent[oe["end_idx"] + 1 :]
-        )
-    else:  # 문장에 object -> subject 순으로 등장
-        new_sent = (
-            sent[: oe["start_idx"]]
-            + etl[tem][2]
-            + etl[tem][6]
-            + oe["type"]
-            + etl[tem][7]
-            + sent[oe["start_idx"] : oe["end_idx"] + 1]
-            + etl[tem][3]
-            + sent[oe["end_idx"] + 1 : se["start_idx"]]
-            + etl[tem][0]
-            + etl[tem][4]
-            + se["type"]
-            + etl[tem][5]
-            + sent[se["start_idx"] : se["end_idx"] + 1]
-            + etl[tem][1]
-            + sent[se["end_idx"] + 1 :]
-        )
-
-    return new_sent
-
-
 def tokenized_dataset(dataset, tokenizer, conf):
     data = []
 
@@ -273,7 +214,6 @@ def tokenized_dataset(dataset, tokenizer, conf):
 
             concat_entity = tokenizer.sep_token.join([subj, obj])
             # roberta 모델은 token_type_ids 레이어를 사용하지 않습니다.
-            # inference를 하는 경우 return_token_type_ids=False 를 반드시 설정해야 입력차원이 학습 때와 같아져 오류가 발생하지 않습니다!!!!!
             output = tokenizer(concat_entity, item["sentence"], padding=True, truncation=True, max_length=256, add_special_tokens=True)
             data.append(output)
     print("========== Tokenized data keys ==========")

@@ -3,7 +3,6 @@ from torch import nn
 import torch
 import model.loss as loss_module
 from torch.cuda.amp import autocast
-import torch
 
 
 class LSTMLayer(nn.Module):
@@ -31,7 +30,7 @@ class LSTMLayer(nn.Module):
         return self.linear(x)
 
 
-class LSTMModel(CustomModel):
+class LSTMModel(nn.Module):
     """
     pretrained model통과 후 classification 하기 전 LSTM 레이어를 통과하도록 추가한 모델
 
