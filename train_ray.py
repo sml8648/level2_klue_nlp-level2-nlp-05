@@ -27,6 +27,8 @@ import re
 import torch.nn.functional as F
 from pydoc import locate
 
+from transformers import AutoConfig, AutoModel
+
 
 def start_mlflow(experiment_name):
     # Enter details of your AzureML workspace
@@ -36,11 +38,9 @@ def start_mlflow(experiment_name):
     ws = Workspace.get(name=workspace_name, subscription_id=subscription_id, resource_group=resource_group)
 
     mlflow.set_tracking_uri(ws.get_mlflow_tracking_uri())
-
-    # https://learn.microsoft.com/ko-kr/azure/machine-learning/how-to-log-view-metrics?tabs=interactive
     mlflow.set_experiment(experiment_name)
     # Start the run
-    mlflow_run = mlflow.start_run()
+    mlflow.start_run()
 
 
 def train(conf, hp_conf):
@@ -76,7 +76,9 @@ def train(conf, hp_conf):
         model.load_state_dict(checkpoint)
     # TAPT로 학습된 모델 로드
     elif conf.model.use_tapt_model:
-        model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
+        # model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
+        config = AutoConfig.from_pretrained("/opt/ml/level2_klue_nlp-level2-nlp-05/best_model/tapt_rbert")
+        model = AutoModel.from_pretrained(config)
     else:
         model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
         model = model_class(conf, len(tokenizer))
@@ -163,7 +165,7 @@ def train(conf, hp_conf):
         direction="maximize",
         backend="ray",
         hp_space=ray_hp_space,
-        n_trials=10,
+        n_trials=hp_conf.n_trials,
     )
 
     trainer = Trainer(
@@ -258,7 +260,7 @@ def train(conf, hp_conf):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="RBERTModel")
     parser.add_argument("--hp_config", type=str, default="hp_search")
     args = parser.parse_args()
 
