@@ -75,27 +75,25 @@ def start_mlflow(experiment_name):
     mlflow_run = mlflow.start_run()
 
 
-def train(args, conf):
+def train(conf, hp_conf):
     now = datetime.now()
     train_start_time = now.strftime("%d-%H-%M")
 
-    # huggingface-cli login  #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
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_name = conf.model.model_name
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+
+    # add special token in rbert model
+    if conf.data.dataloader == "typed_entity_marker_emask":
+        special_tokens_dict = {"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]}
+        tokenizer.add_special_tokens(special_tokens_dict)
+
     data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
-    new_token_count = 0
-    if conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
-        special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
-        tokenizer.add_special_tokens(special_tokens_dict)
-    # new_token_count += tokenizer.add_special_tokens()
-    # new_token_count += tokenizer.add_tokens()
-    new_vocab_size = tokenizer.vocab_size + new_token_count
-    print(new_vocab_size, len(tokenizer))
-
-    experiment_name = model_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    start_mlflow(experiment_name)
+    # mlflow 실험명으로 들어갈 이름을 설정합니다.
+    experiment_name = model_name + "_" + conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
+    # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
@@ -103,35 +101,56 @@ def train(args, conf):
     RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
     RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path,conf)
 
-    # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-    continue_train=False
-    if continue_train:    
-        model_config = AutoConfig.from_pretrained(model_name)
-        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+    if conf.train.continue_train:
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
+        model = model_class(conf, len(tokenizer))
         checkpoint = torch.load(conf.path.load_model_path)
         model.load_state_dict(checkpoint)
-    elif conf.model.model_class_name == 'TAPT' :
-        model = AutoModelForSequenceClassification.from_pretrained(
-        conf.path.load_pretrained_model_path, num_labels=30
-        )
+    # TAPT로 학습된 모델 로드
+    elif conf.model.use_tapt_model:
+        model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
     else:
-        model_class = locate(f'model.model.{conf.model.model_class_name}')
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
         model = model_class(conf, len(tokenizer))
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model.parameters
     model.to(device)
     
+    optimizer = transformers.AdamW(model.parameters(), lr=conf.train.learning_rate)
+
+    # 이등변 삼각형 형태로 lr이 서서히 증가했다가 감소하는 스케줄러입니다.
+    # 첫시작 lr: learning_rate/div_factor, 마지막 lr: 첫시작 lr/final_div_factor
+    # 학습과정 step수를 계산해 스케줄러에 입력해줍니다. -> steps_per_epoch * epochs / 2 지점 기준으로 lr가 상승했다가 감소
+    steps_per_epoch = len(RE_train_dataset) // conf.train.batch_size + 1 if len(RE_train_dataset) % conf.train.batch_size != 0 else len(RE_train_dataset) // conf.train.batch_size
+    scheduler = OneCycleLR(
+        optimizer,
+        max_lr=conf.train.learning_rate,
+        steps_per_epoch=steps_per_epoch,
+        pct_start=0.5,
+        epochs=conf.train.max_epoch,
+        anneal_strategy="linear",
+        div_factor=1e100,
+        final_div_factor=1,
+    )
+
     def ray_hp_space(trial):
         return {
             "learning_rate": tune.loguniform(8e-6, 6e-5),
-            "per_device_train_batch_size": tune.choice([16]),
+            "per_device_train_batch_size": tune.choice([32]),
         }
 
     def model_init(trial):
-        model_class = locate(f'model.model.{conf.model.model_class_name}')
-        model = model_class(conf, len(tokenizer))
+        if conf.train.continue_train:
+            model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
+            model = model_class(conf, len(tokenizer))
+            checkpoint = torch.load(conf.path.load_model_path)
+            model.load_state_dict(checkpoint)
+        # TAPT로 학습된 모델 로드
+        elif conf.model.use_tapt_model:
+            model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
+        else:
+            model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
+            model = model_class(conf, len(tokenizer))
         return model
 
     # 사용한 option 외에도 다양한 option들이 있습니다.
@@ -171,21 +190,21 @@ def train(args, conf):
         model=model,  # 🤗 for Transformers model parameter
         conf=conf,
     )
+    
+    # custom_trainer에도 scheduler, optimizer 설정
+    custom_trainer.lr_scheduler = scheduler
+    custom_trainer.optimizer = optimizer
+
+    print(custom_trainer)
+    print(custom_trainer.optimizer)
+    print(custom_trainer.lr_scheduler)
 
     best_run = custom_trainer.hyperparameter_search(
         direction="maximize",
         backend="ray",
         hp_space=ray_hp_space,
-        n_trials=2,
+        n_trials=1,
     )
-
-    print(best_run)
-    print("Before:", custom_trainer.args)
-    # 참고 예정
-    # best_run으로 받아온 best hyperparameter로 재학습
-    # https://github.com/huggingface/setfit/blob/ebee18ceaecb4414482e0a6b92c97f3f99309d56/scripts/transformers/run_fewshot.py
-    for key, value in best_run.hyperparameters.items():
-        setattr(custom_trainer.args, key, value)
 
     trainer = Trainer(
         model=model,  # the instantiated 🤗 Transformers model to be trained
@@ -194,12 +213,21 @@ def train(args, conf):
         eval_dataset=RE_train_dataset,  # evaluation dataset
         compute_metrics=utils.compute_metrics,  # define metrics function
         data_collator=data_collator,
-        # optimizers=optimizers,
-        # model_init=model_init,
+        optimizers=(optimizer, scheduler),
         callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
     )
+    
+    print(best_run)
+    # hyperparameter_search 한 best_run.txt에 기록하기
+    # best_run으로 받아온 best hyperparameter로 재학습
+    f = open("best_run.txt", 'w')
+    for key, value in best_run.hyperparameters.items():
+        setattr(trainer.args, key, value) # 
+        data = f"{key}: {value}\n"
+        f.write(data)
+        print(data)
 
-    print("After:", trainer.args)
+    f.close()
 
     # train model
     trainer.train()
@@ -274,15 +302,14 @@ def train(args, conf):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-c", type=str, default="base_config")
-    parser.add_argument("--shuffle", default=True)
-    # parser.add_argument('--optimizer', default='AdamW')
-
-    parser.add_argument("--preprocessing", default=False)
-    parser.add_argument("--precision", default=32, type=int)
-    parser.add_argument("--dropout", default=0.1, type=float)
+    parser.add_argument("--hp_config", type=str, default="hp_search")
     args = parser.parse_args()
 
     conf = OmegaConf.load(f"./config/{args.config}.yaml")
+    hp_conf = OmegaConf.load(f"./config/{args.hp_config}.yaml")
+
+    print("실행 중인 config file: ", args.config)
+    print("실행 중인 hp config file: ", args.hp_config)
     # check hyperparameter arguments
-    print(args)
-    train(args, conf)
+
+    train(conf, hp_conf)
