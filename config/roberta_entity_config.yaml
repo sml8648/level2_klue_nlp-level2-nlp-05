@@ -9,7 +9,7 @@ model:
   model_class_name: RobertaForSequenceClassificationWithEntity #model.py에서 사용할 모델 이름
   # Model : Model
   # CustomRBERT : RBERT(tem=2로 설정할 것)
-  model_name: klue/roberta-large
+  model_name: klue/roberta-small
 
 data:
   tem: 3
@@ -20,7 +20,7 @@ data:
 
 train:
   max_epoch: 10
-  batch_size: 32
+  batch_size: 16
   learning_rate: 3e-5
   loss: focal # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
   # nll : nll_loss
@@ -30,8 +30,8 @@ train:
   # save_steps은 반드시 eval_steps의 배수여야 합니다!!!! """n * save_steps = eval_steps"""
   eval_steps: 1000
   logging_steps: 500
-  dropout: 0.15
-  rdrop: False # rdrop 사용시 batch_size / 2
+  dropout: 0.2
+  rdrop: True # rdrop 사용시 batch_size / 2
   
 utils:
   seed: 42

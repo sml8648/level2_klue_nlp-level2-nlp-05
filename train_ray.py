@@ -1,25 +1,18 @@
 import pickle as pickle
-import os
 import pandas as pd
 import torch
-import sklearn
-import numpy as np
-from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
-from transformers import RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
+
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from ray.tune.schedulers import ASHAScheduler
 
-# https://huggingface.co/transformers/v3.0.2/_modules/transformers/trainer.html
 import data_loaders.data_loader as dataloader
 import trainer.trainer as CustomTrainer
 import utils.util as utils
 import transformers
 from torch.optim.lr_scheduler import OneCycleLR
 
-import model.model as model_arch
-from transformers import DataCollatorWithPadding
-
-# https://huggingface.co/course/chapter3/4
+from data_loaders.data_loader import MyDataCollatorWithPadding
 
 import mlflow
 import mlflow.sklearn
@@ -32,32 +25,7 @@ from omegaconf import OmegaConf
 from datetime import datetime
 import re
 import torch.nn.functional as F
-from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
-from collections import defaultdict
 from pydoc import locate
-
-class MyDataCollatorWithPadding(DataCollatorWithPadding):
-    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        max_len = 0
-        for i in features:
-            if len(i['input_ids']) > max_len : max_len = len(i['input_ids'])
-
-        batch = defaultdict(list)
-        for item in features:
-            for k in item:
-                if('label' not in k):
-                    padding_len = max_len - item[k].size(0)
-                    if(k == 'input_ids'):
-                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id]*padding_len)), dim=0)
-                    else:
-                        item[k] = torch.cat((item[k], torch.tensor([0]*padding_len)), dim=0)
-                batch[k].append(item[k])
-                
-        for k in batch:
-            batch[k] = torch.stack(batch[k], dim=0)
-            batch[k] = batch[k].to(torch.long)
-        return batch
-
 
 
 def start_mlflow(experiment_name):
@@ -93,13 +61,13 @@ def train(conf, hp_conf):
 
     # mlflow 실험명으로 들어갈 이름을 설정합니다.
     experiment_name = model_name + "_" + conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    # start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
+    start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
-    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
-    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path,conf)
-    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
-    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path,conf)
+    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path, conf)
+    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path, conf)
+    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path, conf)
+    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path, conf)
 
     if conf.train.continue_train:
         model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
@@ -115,7 +83,7 @@ def train(conf, hp_conf):
 
     model.parameters
     model.to(device)
-    
+
     optimizer = transformers.AdamW(model.parameters(), lr=conf.train.learning_rate)
 
     # 이등변 삼각형 형태로 lr이 서서히 증가했다가 감소하는 스케줄러입니다.
@@ -135,8 +103,8 @@ def train(conf, hp_conf):
 
     def ray_hp_space(trial):
         return {
-            "learning_rate": tune.loguniform(8e-6, 6e-5),
-            "per_device_train_batch_size": tune.choice([32]),
+            "learning_rate": tune.loguniform(hp_conf.learning_rate.min, hp_conf.learning_rate.max),
+            "per_device_train_batch_size": tune.choice([hp_conf.batch_size]),
         }
 
     def model_init(trial):
@@ -153,10 +121,7 @@ def train(conf, hp_conf):
             model = model_class(conf, len(tokenizer))
         return model
 
-    # 사용한 option 외에도 다양한 option들이 있습니다.
-    # https://huggingface.co/transformers/main_classes/trainer.html#trainingarguments 참고해주세요.
     training_args = TrainingArguments(
-        #hub_model_id="jstep750/basburger",
         output_dir=f"./step_saved_model/{re.sub('/', '-', model_name)}/{train_start_time}",  # output directory
         save_total_limit=1,  # number of total save model.
         save_steps=914,  # model saving step.
@@ -164,16 +129,11 @@ def train(conf, hp_conf):
         learning_rate=conf.train.learning_rate,  # learning_rate
         per_device_train_batch_size=conf.train.batch_size,  # batch size per device during training
         per_device_eval_batch_size=conf.train.batch_size,  # batch size for evaluation
-        # weight_decay=0.01,               # strength of weight decay
         logging_dir="./logs",  # directory for storing logs
         logging_steps=500,  # log saving step.
         evaluation_strategy="steps",  # evaluation strategy to adopt during training
-        # `no`: No evaluation during training.
-        # `steps`: Evaluate every `eval_steps`.
-        # `epoch`: Evaluate every end of epoch.
         eval_steps=914,  # evaluation step.
         load_best_model_at_end=True,
-        #push_to_hub=False,
         metric_for_best_model="micro f1 score",
     )
 
@@ -190,7 +150,7 @@ def train(conf, hp_conf):
         model=model,  # 🤗 for Transformers model parameter
         conf=conf,
     )
-    
+
     # custom_trainer에도 scheduler, optimizer 설정
     custom_trainer.lr_scheduler = scheduler
     custom_trainer.optimizer = optimizer
@@ -203,7 +163,7 @@ def train(conf, hp_conf):
         direction="maximize",
         backend="ray",
         hp_space=ray_hp_space,
-        n_trials=1,
+        n_trials=10,
     )
 
     trainer = Trainer(
@@ -216,13 +176,13 @@ def train(conf, hp_conf):
         optimizers=(optimizer, scheduler),
         callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
     )
-    
+
     print(best_run)
     # hyperparameter_search 한 best_run.txt에 기록하기
     # best_run으로 받아온 best hyperparameter로 재학습
-    f = open("best_run.txt", 'w')
+    f = open("best_run.txt", "w")
     for key, value in best_run.hyperparameters.items():
-        setattr(trainer.args, key, value) # 
+        setattr(trainer.args, key, value)  #
         data = f"{key}: {value}\n"
         f.write(data)
         print(data)
@@ -233,7 +193,7 @@ def train(conf, hp_conf):
     trainer.train()
     # trainer.push_to_hub() # Error! DENIED update refs/heads/dev: forbidden
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
-    
+
     mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     # trainer.push_to_hub()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     model.eval()
@@ -244,10 +204,7 @@ def train(conf, hp_conf):
     print("eval auprc: ", metrics["eval_auprc"])
     print("eval micro f1 score: ", metrics["eval_micro f1 score"])
 
-    
     # best_model 저장할 때 사용했던 config파일도 같이 저장합니다.
-    if not os.path.exists(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}"):
-        os.makedirs(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
     with open(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/config.yaml", "w+") as fp:
         OmegaConf.save(config=conf, f=fp.name)
 
@@ -257,8 +214,8 @@ def train(conf, hp_conf):
 
     # Test 점수 확인
     predict_dev = True  # dev set에 대한 prediction 결과값 구하기 (output분석)
-    predict_submit = True # dev set은 evaluation만 하고 submit할 결과값 구하기
-    if(predict_dev):
+    predict_submit = True  # dev set은 evaluation만 하고 submit할 결과값 구하기
+    if predict_dev:
         outputs = trainer.predict(RE_test_dataset)
         logits = torch.FloatTensor(outputs.predictions)
         prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
@@ -274,7 +231,7 @@ def train(conf, hp_conf):
 
         output.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/dev_submission_{train_start_time}.csv", index=False)
         output.to_csv(f"./prediction/dev_submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
-    if(predict_submit):
+    if predict_submit:
         metrics = trainer.evaluate(RE_test_dataset)
         print("Training is complete!")
         print("==================== Test metric score ====================")
