@@ -7,6 +7,7 @@ import numpy as np
 from transformers import AutoTokenizer, AutoConfig, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
 from transformers import RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification, BertTokenizer
 from ray.tune.suggest.hyperopt import HyperOptSearch
+from ray.tune.search.bayesopt import BayesOptSearch
 from ray.tune.schedulers import ASHAScheduler
 
 # https://huggingface.co/transformers/v3.0.2/_modules/transformers/trainer.html
@@ -36,6 +37,8 @@ import torch.nn.functional as F
 from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 from collections import defaultdict
 from pydoc import locate
+from train_raybohb import hyperparameter_tune
+
 
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
@@ -87,9 +90,11 @@ def train(args, conf):
     data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
     new_token_count = 0
-    if conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
-        special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
+    # add special token in rbert model
+    if conf.data.dataloader == "typed_entity_marker_emask":
+        special_tokens_dict = {"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]}
         tokenizer.add_special_tokens(special_tokens_dict)
+
     # new_token_count += tokenizer.add_special_tokens()
     # new_token_count += tokenizer.add_tokens()
     new_vocab_size = tokenizer.vocab_size + new_token_count
@@ -105,37 +110,26 @@ def train(args, conf):
     RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path,conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-    continue_train=False
-    if continue_train:    
-        model_config = AutoConfig.from_pretrained(model_name)
-        model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
+    if conf.train.continue_train:
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
+        model = model_class(conf, len(tokenizer))
         checkpoint = torch.load(conf.path.load_model_path)
         model.load_state_dict(checkpoint)
-    elif conf.model.model_class_name == 'TAPT' :
-        model = AutoModelForSequenceClassification.from_pretrained(
-        conf.path.load_pretrained_model_path, num_labels=30
-        )
+        # TAPT로 학습된 모델 로드
+    elif conf.model.use_tapt_model:
+        model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
     else:
-        model_class = locate(f'model.model.{conf.model.model_class_name}')
-        if model_class == None :
-             model_class = locate(f'model.modeling_roberta.{conf.model.model_class_name}') # for modeling_roberta
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
         model = model_class(conf, len(tokenizer))
+
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model.parameters
     model.to(device)
-    
-    def ray_hp_space(trial):
-        return {
-            "learning_rate": tune.loguniform(8e-6, 6e-5),
-            "per_device_train_batch_size": tune.choice([16]),
-        }
 
     def model_init(trial):
-        model_class = locate(f'model.model.{conf.model.model_class_name}')
-        if model_class == None :
-            model_class = locate(f'model.modeling_roberta.{conf.model.model_class_name}') # for modeling_roberta
+        model_class = locate(f'model.{conf.model.model_type}.{conf.model.model_class_name}')
         model = model_class(conf, len(tokenizer))
         return model
 
@@ -145,26 +139,26 @@ def train(args, conf):
         #hub_model_id="jstep750/basburger",
         output_dir=f"./step_saved_model/{re.sub('/', '-', model_name)}/{train_start_time}",  # output directory
         save_total_limit=1,  # number of total save model.
-        save_steps=914,  # model saving step.
+        save_steps=conf.train.eval_steps,  # model saving step.
         num_train_epochs=conf.train.max_epoch,  # total number of training epochs
         learning_rate=conf.train.learning_rate,  # learning_rate
         per_device_train_batch_size=conf.train.batch_size,  # batch size per device during training
         per_device_eval_batch_size=conf.train.batch_size,  # batch size for evaluation
         # weight_decay=0.01,               # strength of weight decay
         logging_dir="./logs",  # directory for storing logs
-        logging_steps=500,  # log saving step.
+        logging_steps=conf.train.logging_steps,  # log saving step.
         evaluation_strategy="steps",  # evaluation strategy to adopt during training
         # `no`: No evaluation during training.
         # `steps`: Evaluate every `eval_steps`.
         # `epoch`: Evaluate every end of epoch.
-        eval_steps=914,  # evaluation step.
+        eval_steps=conf.train.eval_steps,  # evaluation step.
         load_best_model_at_end=True,
         #push_to_hub=False,
         metric_for_best_model="micro f1 score",
     )
 
     # for hyper parameter search
-    custom_trainer = CustomTrainer.CustomTrainer(
+    ray_trainer = Trainer(
         args=training_args,  # training arguments, defined above
         train_dataset=RE_train_dataset,  # training dataset
         eval_dataset=RE_dev_dataset,  # evaluation dataset
@@ -174,24 +168,31 @@ def train(args, conf):
         # optimizers=(optimizer, scheduler), # Error : `model_init` is incompatible with `optimizers`
         callbacks=[EarlyStoppingCallback(early_stopping_patience=conf.utils.patience)],
         model=model,  # 🤗 for Transformers model parameter
-        conf=conf,
+        #conf=conf,
     )
-
-    best_run = custom_trainer.hyperparameter_search(
-        direction="maximize",
-        backend="ray",
-        hp_space=ray_hp_space,
-        n_trials=2,
-    )
+    
+    best_run = hyperparameter_tune(ray_trainer, training_args, experiment_name)
 
     print(best_run)
-    print("Before:", custom_trainer.args)
+    # hyperparameter_search 한 best_run.txt에 기록하기
+    # best_run으로 받아온 best hyperparameter로 재학습
+    if not os.path.exists(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}"):
+        os.makedirs(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
+    with open(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/best_run.txt", 'w+') as f:
+        for key, value in best_run.hyperparameters.items():
+            setattr(ray_trainer.args, key, value) # 
+            data = f"{key}: {value}\n"
+            f.write(data)
+            print(data)
+
+
+    print("Before:", ray_trainer.args)
     # 참고 예정
     # best_run으로 받아온 best hyperparameter로 재학습
     # https://github.com/huggingface/setfit/blob/ebee18ceaecb4414482e0a6b92c97f3f99309d56/scripts/transformers/run_fewshot.py
     for key, value in best_run.hyperparameters.items():
-        setattr(custom_trainer.args, key, value)
-
+        setattr(ray_trainer.args, key, value)
+    
     trainer = Trainer(
         model=model,  # the instantiated 🤗 Transformers model to be trained
         args=training_args,  # training arguments, defined above
@@ -252,13 +253,6 @@ def train(args, conf):
         output.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/dev_submission_{train_start_time}.csv", index=False)
         output.to_csv(f"./prediction/dev_submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
     if(predict_submit):
-        metrics = trainer.evaluate(RE_test_dataset)
-        print("Training is complete!")
-        print("==================== Test metric score ====================")
-        print("eval loss: ", metrics["eval_loss"])
-        print("eval auprc: ", metrics["eval_auprc"])
-        print("eval micro f1 score: ", metrics["eval_micro f1 score"])
-
         outputs1 = trainer.predict(RE_predict_dataset)
         logits1 = torch.FloatTensor(outputs1.predictions)
         prob1 = F.softmax(logits1, dim=-1).detach().cpu().numpy()
