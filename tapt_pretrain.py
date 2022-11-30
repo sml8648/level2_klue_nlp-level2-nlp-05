@@ -9,6 +9,7 @@ from transformers import (
 import torch
 from transformers import Trainer, TrainingArguments
 
+
 def tapt_pretrain(conf):
     model_name = conf.model.model_name
 
@@ -28,9 +29,7 @@ def tapt_pretrain(conf):
     model.to(device)
 
     # token 15% 확률 masking 진행
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer, mlm=True, mlm_probability=0.15
-    )
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15)
 
     # TAPT task이기 때문에 evaluation_strategy X
     # cuda out-of-memory 발생하여 fp16 = True 로 변경
@@ -45,7 +44,7 @@ def tapt_pretrain(conf):
         save_strategy="steps",
         logging_dir="./logs",
         logging_steps=4000,
-        fp16=True, # 16비트로 변환
+        fp16=True,  # 16비트로 변환
         fp16_opt_level="O1",
         resume_from_checkpoint=True,
     )
