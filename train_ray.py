@@ -129,7 +129,7 @@ def train(args, conf):
         model=model,  # the instantiated 🤗 Transformers model to be trained
         args=training_args,  # training arguments, defined above
         train_dataset=RE_train_dataset,  # training dataset
-        eval_dataset=RE_train_dataset,  # evaluation dataset
+        eval_dataset=RE_dev_dataset,  # evaluation dataset
         compute_metrics=utils.compute_metrics,  # define metrics function
         data_collator=data_collator,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],

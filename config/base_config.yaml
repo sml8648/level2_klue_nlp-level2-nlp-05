@@ -5,22 +5,22 @@ path:
   predict_path: ./dataset/predict/predict.csv
 
   # TAPT를 진행한 모델을 불러오려면 디렉토리 경로를 입력해주세요.
-  load_pretrained_model_path : /opt/ml/level2_klue(dev-1123)/klue-roberta-pretrained
+  load_pretrained_model_path : /opt/ml/level2_klue_nlp-level2-nlp-05/best_model/tapt_rbert
   # inference를 하는 경우 로드할 모델의 경로를 입력해주세요.
-  load_model_path: /opt/ml/github/level2_klue_nlp-level2-nlp-05/step_saved_model/klue-roberta-small/18-17-38/checkpoint-500/pytorch_model.bin
+  load_model_path: 
 
 model:
-  model_name: klue/roberta-small
+  model_name: klue/roberta-large
   # model 폴더 안에서 사용할 {model type}.py
-  model_type: entity_roberta
+  model_type: rbert
   # {model type}.py 안에서 사용할 모델 함수명
-  model_class_name: RobertaForSequenceClassificationWithEntity
+  model_class_name: RBERTModel
   # TAPT 모델 사용 여부
-  use_tapt_model: False
+  use_tapt_model: True
 
 
 data:
-  dataloader: entity_marker
+  dataloader: typed_entity_marker_emask
   # """dataloader: 사용하는 모델명"""
 
   # "typed_entity_marker": AuxiliaryModel, LSTM
@@ -30,14 +30,14 @@ data:
   # "default": Default, TAPT
 
 train:
-  max_epoch: 1
-  batch_size: 32
+  max_epoch: 10
+  batch_size: 16
   learning_rate: 3e-5
   loss: focal # loss.py 맨 아래 config 되어 있는 값을 받아서 loss 함수를 가져옵니다.
-  save_steps: 500
+  save_steps: 2000
   # save_steps은 반드시 eval_steps의 배수여야 합니다!!!! """n * save_steps = eval_steps"""
-  eval_steps: 250
-  logging_steps: 500
+  eval_steps: 2000
+  logging_steps: 2000
   dropout: 0.2
   rdrop: True # rdrop 사용시 batch_size / 2
   continue_train: False
