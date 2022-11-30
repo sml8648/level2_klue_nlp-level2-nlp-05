@@ -41,9 +41,9 @@ if __name__ == "__main__":
         else:
             inference.inference(conf)
 
-    elif args.mode == "tapt" or args.mode == "tp" :
+    elif args.mode == "tapt" or args.mode == "tp":
         tapt_pretrain.tapt_pretrain(conf)
-        
+
     else:
         print("실행모드를 다시 입력해주세요.")
         print("train        : t,\ttrain")

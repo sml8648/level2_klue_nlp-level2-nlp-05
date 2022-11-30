@@ -18,6 +18,7 @@ import transformers
 from torch.optim.lr_scheduler import OneCycleLR
 
 import model.model as model_arch
+import model.modeling_roberta as roberta_arch
 from transformers import DataCollatorWithPadding
 
 # https://huggingface.co/course/chapter3/4
@@ -271,7 +272,7 @@ def train(args, conf):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="roberta_entity_config")
     parser.add_argument("--shuffle", default=True)
     # parser.add_argument('--optimizer', default='AdamW')
 

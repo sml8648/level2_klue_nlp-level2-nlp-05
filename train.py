@@ -11,6 +11,8 @@ from transformers import AutoModelForSequenceClassification
 import data_loaders.data_loader as dataloader
 import utils.util as utils
 import model.model as model_arch
+import model.modeling_roberta as roberta_arch
+from typing import Any, Callable, Dict, List, NewType, Optional, Tuple, Union
 
 import mlflow
 import mlflow.sklearn
@@ -28,23 +30,25 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 
+
 class MyDataCollatorWithPadding(DataCollatorWithPadding):
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
         max_len = 0
         for i in features:
-            if len(i['input_ids']) > max_len : max_len = len(i['input_ids'])
+            if len(i["input_ids"]) > max_len:
+                max_len = len(i["input_ids"])
 
         batch = defaultdict(list)
         for item in features:
             for k in item:
-                if('label' not in k):
+                if "label" not in k:
                     padding_len = max_len - item[k].size(0)
-                    if(k == 'input_ids'):
-                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id]*padding_len)), dim=0)
+                    if k == "input_ids":
+                        item[k] = torch.cat((item[k], torch.tensor([self.tokenizer.pad_token_id] * padding_len)), dim=0)
                     else:
-                        item[k] = torch.cat((item[k], torch.tensor([0]*padding_len)), dim=0)
+                        item[k] = torch.cat((item[k], torch.tensor([0] * padding_len)), dim=0)
                 batch[k].append(item[k])
-                
+
         for k in batch:
             batch[k] = torch.stack(batch[k], dim=0)
             batch[k] = batch[k].to(torch.long)
@@ -78,10 +82,10 @@ def train(conf):
     # use_fast=False로 수정할 경우 -> RuntimeError 발생
     # RuntimeError: CUDA error: CUBLAS_STATUS_NOT_INITIALIZED when calling `cublasCreate(handle)`
 
-    if conf.data.tem == 2: #typed entity token에 쓰이는 스페셜 토큰
-        special_tokens_dict = {'additional_special_tokens': ['<e1>', '</e1>', '<e2>', '</e2>', '<e3>', '</e3>', '<e4>', '</e4>']}
+    if conf.data.tem == 2:  # typed entity token에 쓰이는 스페셜 토큰
+        special_tokens_dict = {"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]}
         tokenizer.add_special_tokens(special_tokens_dict)
-        
+
     data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
     # 이후 토큰을 추가하는 경우 이 부분에 추가해주세요.
@@ -89,28 +93,28 @@ def train(conf):
     # tokenizer.add_tokens()
 
     # mlflow 실험명으로 들어갈 이름을 설정합니다.
-    experiment_name = model_name +'_'+ conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
+    experiment_name = model_name + "_" + conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
     start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
-    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path,conf)
-    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path,conf)
-    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path,conf)
-    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path,conf)
+    RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path, conf)
+    RE_dev_dataset = dataloader.load_dataset(tokenizer, conf.path.dev_path, conf)
+    RE_test_dataset = dataloader.load_dataset(tokenizer, conf.path.test_path, conf)
+    RE_predict_dataset = dataloader.load_predict_dataset(tokenizer, conf.path.predict_path, conf)
 
     # 모델을 로드합니다. 커스텀 모델을 사용하시는 경우 이 부분을 바꿔주세요.
-    continue_train=False
-    if continue_train:    
+    continue_train = False
+    if continue_train:
         model_config = AutoConfig.from_pretrained(model_name)
         model = model_arch.CustomRBERT(model_config, conf, len(tokenizer))
         checkpoint = torch.load(conf.path.load_model_path)
         model.load_state_dict(checkpoint)
-    elif conf.model.model_class_name == 'TAPT' :
-        model = AutoModelForSequenceClassification.from_pretrained(
-        conf.path.load_pretrained_model_path, num_labels=30
-        )
+    elif conf.model.model_class_name == "TAPT":
+        model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
     else:
         model_class = locate(f'model.model.{conf.model.model_class_name}')
+        if model_class == None :
+             model_class = locate(f'model.modeling_roberta.{conf.model.model_class_name}') # for modeling_roberta
         model = model_class(conf, len(tokenizer))
 
     model.parameters
@@ -174,7 +178,7 @@ def train(conf):
     # train 과정에서 가장 평가 점수가 좋은 모델을 저장합니다.
     # best_model 폴더에 저장됩니다.
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
-    
+
     mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     # trainer.push_to_hub()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     model.eval()
@@ -197,8 +201,8 @@ def train(conf):
 
     # Test 점수 확인
     predict_dev = True  # dev set에 대한 prediction 결과값 구하기 (output분석)
-    predict_submit = True # dev set은 evaluation만 하고 submit할 결과값 구하기
-    if(predict_dev):
+    predict_submit = True  # dev set은 evaluation만 하고 submit할 결과값 구하기
+    if predict_dev:
         outputs = trainer.predict(RE_test_dataset)
         logits = torch.FloatTensor(outputs.predictions)
         prob = F.softmax(logits, dim=-1).detach().cpu().numpy()
@@ -214,7 +218,7 @@ def train(conf):
 
         output.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/dev_submission_{train_start_time}.csv", index=False)
         output.to_csv(f"./prediction/dev_submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
-    if(predict_submit):
+    if predict_submit:
         outputs1 = trainer.predict(RE_predict_dataset)
         logits1 = torch.FloatTensor(outputs1.predictions)
         prob1 = F.softmax(logits1, dim=-1).detach().cpu().numpy()
