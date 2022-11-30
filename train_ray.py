@@ -1,33 +1,28 @@
 import pickle as pickle
-import pandas as pd
-import torch
+from datetime import datetime
+import re
+from pydoc import locate
 
+import pandas as pd
+
+import torch
+import torch.nn.functional as F
+
+from transformers import AutoConfig, AutoModel
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
-from ray.tune.suggest.hyperopt import HyperOptSearch
-from ray.tune.schedulers import ASHAScheduler
 
 import data_loaders.data_loader as dataloader
-import trainer.trainer as CustomTrainer
 import utils.util as utils
-import transformers
-from torch.optim.lr_scheduler import OneCycleLR
-
 from data_loaders.data_loader import MyDataCollatorWithPadding
+from train_raybohb import hyperparameter_tune
 
 import mlflow
 import mlflow.sklearn
 
-from ray import tune
 from azureml.core import Workspace
 import argparse
 
 from omegaconf import OmegaConf
-from datetime import datetime
-import re
-import torch.nn.functional as F
-from pydoc import locate
-
-from transformers import AutoConfig, AutoModel
 
 
 def start_mlflow(experiment_name):
@@ -38,30 +33,24 @@ def start_mlflow(experiment_name):
     ws = Workspace.get(name=workspace_name, subscription_id=subscription_id, resource_group=resource_group)
 
     mlflow.set_tracking_uri(ws.get_mlflow_tracking_uri())
+
     mlflow.set_experiment(experiment_name)
     # Start the run
     mlflow.start_run()
 
 
-def train(conf, hp_conf):
+def train(args, conf):
     now = datetime.now()
     train_start_time = now.strftime("%d-%H-%M")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     model_name = conf.model.model_name
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
 
     # add special token in rbert model
     if conf.data.dataloader == "typed_entity_marker_emask":
         special_tokens_dict = {"additional_special_tokens": ["<e1>", "</e1>", "<e2>", "</e2>", "<e3>", "</e3>", "<e4>", "</e4>"]}
         tokenizer.add_special_tokens(special_tokens_dict)
-
-    data_collator = MyDataCollatorWithPadding(tokenizer=tokenizer)
-
-    # mlflow 실험명으로 들어갈 이름을 설정합니다.
-    experiment_name = model_name + "_" + conf.model.model_class_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
-    start_mlflow(experiment_name)  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
 
     # load dataset
     RE_train_dataset = dataloader.load_dataset(tokenizer, conf.path.train_path, conf)
@@ -74,99 +63,67 @@ def train(conf, hp_conf):
         model = model_class(conf, len(tokenizer))
         checkpoint = torch.load(conf.path.load_model_path)
         model.load_state_dict(checkpoint)
-    # TAPT로 학습된 모델 로드
+        # TAPT로 학습된 모델 로드
     elif conf.model.use_tapt_model:
-        # model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
-        config = AutoConfig.from_pretrained("/opt/ml/level2_klue_nlp-level2-nlp-05/best_model/tapt_rbert")
-        model = AutoModel.from_pretrained(config)
+        model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
     else:
         model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
         model = model_class(conf, len(tokenizer))
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     model.parameters
     model.to(device)
 
-    optimizer = transformers.AdamW(model.parameters(), lr=conf.train.learning_rate)
-
-    # 이등변 삼각형 형태로 lr이 서서히 증가했다가 감소하는 스케줄러입니다.
-    # 첫시작 lr: learning_rate/div_factor, 마지막 lr: 첫시작 lr/final_div_factor
-    # 학습과정 step수를 계산해 스케줄러에 입력해줍니다. -> steps_per_epoch * epochs / 2 지점 기준으로 lr가 상승했다가 감소
-    steps_per_epoch = len(RE_train_dataset) // conf.train.batch_size + 1 if len(RE_train_dataset) % conf.train.batch_size != 0 else len(RE_train_dataset) // conf.train.batch_size
-    scheduler = OneCycleLR(
-        optimizer,
-        max_lr=conf.train.learning_rate,
-        steps_per_epoch=steps_per_epoch,
-        pct_start=0.5,
-        epochs=conf.train.max_epoch,
-        anneal_strategy="linear",
-        div_factor=1e100,
-        final_div_factor=1,
-    )
-
-    def ray_hp_space(trial):
-        return {
-            "learning_rate": tune.loguniform(hp_conf.learning_rate.min, hp_conf.learning_rate.max),
-            "per_device_train_batch_size": tune.choice([hp_conf.batch_size]),
-        }
-
     def model_init(trial):
-        if conf.train.continue_train:
-            model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
-            model = model_class(conf, len(tokenizer))
-            checkpoint = torch.load(conf.path.load_model_path)
-            model.load_state_dict(checkpoint)
-        # TAPT로 학습된 모델 로드
-        elif conf.model.use_tapt_model:
-            model = AutoModelForSequenceClassification.from_pretrained(conf.path.load_pretrained_model_path, num_labels=30)
-        else:
-            model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
-            model = model_class(conf, len(tokenizer))
+        model_class = locate(f"model.{conf.model.model_type}.{conf.model.model_class_name}")
+        model = model_class(conf, len(tokenizer))
         return model
 
     training_args = TrainingArguments(
-        output_dir=f"./step_saved_model/{re.sub('/', '-', model_name)}/{train_start_time}",  # output directory
+        output_dir=f"./step_saved_model/{re.sub('/', '-', model_name)}/{train_start_time}",
         save_total_limit=1,  # number of total save model.
-        save_steps=914,  # model saving step.
+        save_steps=conf.train.eval_steps,  # model saving step.
         num_train_epochs=conf.train.max_epoch,  # total number of training epochs
         learning_rate=conf.train.learning_rate,  # learning_rate
         per_device_train_batch_size=conf.train.batch_size,  # batch size per device during training
         per_device_eval_batch_size=conf.train.batch_size,  # batch size for evaluation
         logging_dir="./logs",  # directory for storing logs
-        logging_steps=500,  # log saving step.
+        logging_steps=conf.train.logging_steps,  # log saving step.
         evaluation_strategy="steps",  # evaluation strategy to adopt during training
-        eval_steps=914,  # evaluation step.
+        eval_steps=conf.train.eval_steps,  # evaluation step.
         load_best_model_at_end=True,
         metric_for_best_model="micro f1 score",
     )
 
     # for hyper parameter search
-    custom_trainer = CustomTrainer.CustomTrainer(
+    ray_trainer = Trainer(
         args=training_args,  # training arguments, defined above
         train_dataset=RE_train_dataset,  # training dataset
         eval_dataset=RE_dev_dataset,  # evaluation dataset
         compute_metrics=utils.compute_metrics,  # define metrics function
         data_collator=data_collator,
         model_init=model_init,
-        # optimizers=(optimizer, scheduler), # Error : `model_init` is incompatible with `optimizers`
         callbacks=[EarlyStoppingCallback(early_stopping_patience=conf.utils.patience)],
         model=model,  # 🤗 for Transformers model parameter
-        conf=conf,
     )
 
-    # custom_trainer에도 scheduler, optimizer 설정
-    custom_trainer.lr_scheduler = scheduler
-    custom_trainer.optimizer = optimizer
+    experiment_name = model_name + "_bs" + str(conf.train.batch_size) + "_ep" + str(conf.train.max_epoch) + "_lr" + str(conf.train.learning_rate)
+    best_run = hyperparameter_tune(ray_trainer, training_args, experiment_name)
 
-    print(custom_trainer)
-    print(custom_trainer.optimizer)
-    print(custom_trainer.lr_scheduler)
+    print(best_run)
+    # hyperparameter_search 한 best_run.txt에 기록하기
+    # best_run으로 받아온 best hyperparameter로 재학습
+    with open(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/best_run.txt", "w+") as f:
+        for key, value in best_run.hyperparameters.items():
+            setattr(ray_trainer.args, key, value)  #
+            data = f"{key}: {value}\n"
+            f.write(data)
+            print(data)
 
-    best_run = custom_trainer.hyperparameter_search(
-        direction="maximize",
-        backend="ray",
-        hp_space=ray_hp_space,
-        n_trials=hp_conf.n_trials,
-    )
+    print("Before:", ray_trainer.args)
+
+    start_mlflow(experiment_name)
 
     trainer = Trainer(
         model=model,  # the instantiated 🤗 Transformers model to be trained
@@ -175,29 +132,20 @@ def train(conf, hp_conf):
         eval_dataset=RE_train_dataset,  # evaluation dataset
         compute_metrics=utils.compute_metrics,  # define metrics function
         data_collator=data_collator,
-        optimizers=(optimizer, scheduler),
         callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
     )
 
-    print(best_run)
-    # hyperparameter_search 한 best_run.txt에 기록하기
     # best_run으로 받아온 best hyperparameter로 재학습
-    f = open("best_run.txt", "w")
     for key, value in best_run.hyperparameters.items():
-        setattr(trainer.args, key, value)  #
-        data = f"{key}: {value}\n"
-        f.write(data)
-        print(data)
+        setattr(trainer.args, key, value)
 
-    f.close()
+    print("After:", trainer.args)
 
     # train model
     trainer.train()
-    # trainer.push_to_hub() # Error! DENIED update refs/heads/dev: forbidden
     trainer.save_model(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}")
 
     mlflow.end_run()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
-    # trainer.push_to_hub()  # 간단한 실행을 하는 경우 주석처리를 하시면 더 빠르게 실행됩니다.
     model.eval()
     metrics = trainer.evaluate(RE_test_dataset)
     print("Training is complete!")
@@ -234,13 +182,6 @@ def train(conf, hp_conf):
         output.to_csv(f"./best_model/{re.sub('/', '-', model_name)}/{train_start_time}/dev_submission_{train_start_time}.csv", index=False)
         output.to_csv(f"./prediction/dev_submission_{train_start_time}.csv", index=False)  # 최종적으로 완성된 예측한 라벨 csv 파일 형태로 저장.
     if predict_submit:
-        metrics = trainer.evaluate(RE_test_dataset)
-        print("Training is complete!")
-        print("==================== Test metric score ====================")
-        print("eval loss: ", metrics["eval_loss"])
-        print("eval auprc: ", metrics["eval_auprc"])
-        print("eval micro f1 score: ", metrics["eval_micro f1 score"])
-
         outputs1 = trainer.predict(RE_predict_dataset)
         logits1 = torch.FloatTensor(outputs1.predictions)
         prob1 = F.softmax(logits1, dim=-1).detach().cpu().numpy()
@@ -260,15 +201,10 @@ def train(conf, hp_conf):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="RBERTModel")
-    parser.add_argument("--hp_config", type=str, default="hp_search")
+    parser.add_argument("--config", "-c", type=str, default="base_config")
     args = parser.parse_args()
 
     conf = OmegaConf.load(f"./config/{args.config}.yaml")
-    hp_conf = OmegaConf.load(f"./config/{args.hp_config}.yaml")
-
-    print("실행 중인 config file: ", args.config)
-    print("실행 중인 hp config file: ", args.hp_config)
     # check hyperparameter arguments
-
-    train(conf, hp_conf)
+    print(args)
+    train(args, conf)
