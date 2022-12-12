@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+# log
+logs/
+
+# pretrained
+klue-roberta-pretrained/
+
 # Distribution / packaging
 .Python
 env/
