@@ -12,8 +12,6 @@
 
 ---
 
-<br>
-
 ## 📝 Competition Description <a name='competition'></a>
 
 관계 추출(Relation Extraction)은 문장의 단어(Entity)에 대한 속성과 관계를 예측하는 문제입니다. 
@@ -55,15 +53,13 @@
 
 ## 🗄 Folder Structure <a name='folder'></a>
 ```
-├──📁base 
-│   ├── base_data_loader.py
-│   ├── base_model.py
-│   └── base_trainer.py
-│
 ├──📁config
-│   └── base_config.yaml → custom_config.yaml 만들기 가능
+│   └── base_config.yaml
+│   └── custom_config.yaml 
+│
 ├──📁data_loaders
-│   └── data_loader.py → 데이터셋을 로드합니다. 
+│   └── data_loader.py  → 데이터셋을 로드합니다. 
+│   └── preprocessing.py
 │
 ├──📁dataset
 │   ├──📁dev
@@ -71,24 +67,24 @@
 │   ├──📁predict
 │   │   ├── predict.csv → 예측해야하는 데이터
 │   │   └── sample_submission.csv → 샘플 데이터
+│   ├──📁pretrain
+│   │   ├── all_data.csv → train + test 데이터
+│   │   └── train.csv
 │   ├──📁test
 │   │   └── test.csv → 모델 학습 후 마지막 평가에서 사용하는 데이터
 │   └──📁train
 │       └── train.csv → 학습 데이터
-│
-├── dict_label_to_num.pkl
-├── dict_num_to_label.pkl
-├── inference.py → inference 코드
-│
-├── main.py → train.py와 inference.py 실행 코드
-주의❗️) omegaconfig 파일 이름을 main.py에서 입력해야해요 !!!
-ex) train하는 경우 → python main.py -mt
-    inference하는 경우 → python main.py -mi
+|       └── gpt_autmentation, roberta_augmentation, pororo_augmentation.csv
 │
 ├──📁model
+│   ├── auxiliary.py
+│   ├── entity_roberta.py
 │   ├── loss.py
+│   ├── lstm.py
 │   ├── metric.py 
-│   └── model.py
+│   ├── model.py
+│   ├── rbert.py
+│   └── recent.py
 │
 ├──📁prediction
 │   ├── sample_submission.csv
@@ -96,23 +92,28 @@ ex) train하는 경우 → python main.py -mt
 │   └── submission_18-14-46.csv → inference하는 경우, '날짜-시간-분.csv'가 뒤에 붙음
 │
 ├──📁step_saved_model → save_steps 조건에서 모델이 저장되는 경로.
-│   └──📁klue-roberta-small → 사용한 모델
+│   └──📁klue-roberta-large → 사용한 모델
 │       └──📁18-14-42       → 실행한 날짜-시간-분
-│           └── checkpoint-500 → 저장된 체크포인트-스탭
-│               ├── optimizer.pt
-│               ├── pytorch_model.bin → 이 파일을 inference할 때 불러오기!
-│               ├── rng_state.pth
-│               ├── scheduler.pt
-│               ├── trainer_state.json
-│               └── training_args.bin
-│
-├── train.py → train 하는 함수
-│
+│           └──📁checkpoint-500 → 저장된 체크포인트-스탭
+│ 
 ├──📁trainer
 │   └── trainer.py
 │
 └──📁utils
-    └── util.py
+│    └── util.py             
+│
+├── dict_label_to_num.pkl
+├── dict_num_to_label.pkl
+├── inference.py → inference 코드
+│
+├── main.py → train.py와 inference.py 실행 코드
+│   ex) train하는 경우 → python main.py -mt
+│       inference하는 경우 → python main.py -mi
+│  
+├── tapt_pretrain.py → tapt task 코드
+├── train.py → train 코드
+├── train_ray.py → hyperparameter search 코드
+└── train_raybohb.py
 
 
 ```
@@ -134,7 +135,7 @@ train : dev : test = 8 : 1 : 1
 
 ## 💻 How to Run <a name='torun'></a>
 
-### How to train
+### How to Train
 
 ```bash
 $ python main.py  -mt
@@ -143,5 +144,11 @@ $ python main.py  -mt
 ### How to Inference
 
 ```bash
-$ python inference.py  -mi
+$ python main.py  -mi
+```
+
+### How to TAPT pretrain
+
+```bash
+$ python main.py  -mtp
 ```
